@@ -2,6 +2,7 @@ use std::{
     fs::File,
     io::{BufReader, Cursor},
     sync::mpsc,
+    thread,
 };
 
 use rustache::{
@@ -10,15 +11,18 @@ use rustache::{
 };
 
 fn main() {
-    println!("{:#?}", templates("views", "**/*.mustache"));
-    // let input = String::from("asdas");
-    // let reader = BufReader::with_capacity(64, Cursor::new(input));
+    // println!("{:#?}", templates("views", "**/*.mustache"));
     // let file = File::open("test.mustache").expect("Failed to open file");
     // let reader = BufReader::with_capacity(64, file);
-    // let (sender, reciever) = mpsc::sync_channel::<Token>(2);
-    // lex(reader, sender);
+    let (sender, reciever) = mpsc::sync_channel::<Token>(2);
 
-    // while let Ok(token) = reciever.recv() {
-    //     println!("{:#?}", token);
-    // }
+    thread::spawn(move || {
+        let input = String::from("asdas{{.}}");
+        let reader = BufReader::with_capacity(64, Cursor::new(input));
+        lex(reader, sender);
+    });
+
+    while let Ok(token) = reciever.recv() {
+        println!("{:#?}", token);
+    }
 }

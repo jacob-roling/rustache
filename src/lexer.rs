@@ -1,4 +1,5 @@
 use anyhow::Error;
+use core::{fmt, num};
 use std::{
     io::{self, BufRead, BufReader},
     sync::mpsc::SyncSender,
@@ -67,6 +68,7 @@ struct LexText;
 
 impl<R: io::Read> State<R> for LexText {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
+        println!("TEXT {}", lexer.current());
         for _ in lexer.current().len()..lexer.open_delimiter.len() {
             lexer.next();
         }
@@ -94,6 +96,7 @@ struct LexOpenDelimiter;
 
 impl<R: io::Read> State<R> for LexOpenDelimiter {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
+        println!("OPEN DELIM");
         lexer.next();
         lexer.next();
         lexer.emit(Token::OpenDelimiter);
@@ -105,11 +108,9 @@ struct LexInsideDelimiter;
 
 impl<R: io::Read> State<R> for LexInsideDelimiter {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
-        for _ in lexer.current().len()..lexer.close_delimiter.len() {
-            lexer.next();
-        }
+        println!("INSIDE DELIM");
         loop {
-            if lexer.current().ends_with(lexer.close_delimiter.as_str()) {
+            if lexer.peekn(lexer.close_delimiter.len()) == lexer.close_delimiter {
                 println!("ASSAD {}", lexer.current());
                 lexer.backup(lexer.close_delimiter.len());
                 return Some(Box::new(LexCloseDelimiter));
@@ -167,7 +168,9 @@ struct LexCloseDelimiter;
 
 impl<R: io::Read> State<R> for LexCloseDelimiter {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
-        println!("{}", lexer.buffer);
+        println!("CLOSE DELIM");
+        lexer.next();
+        lexer.next();
         lexer.emit(Token::CloseDelimiter);
         return Some(Box::new(LexText));
     }
@@ -251,6 +254,19 @@ impl<R: io::Read> Lexer<R> {
         return next_character;
     }
 
+    pub fn peekn(&mut self, count: usize) -> String {
+        let mut result = String::new();
+        let mut num_added = 0;
+        for _ in 0..count {
+            if let Some(next_character) = self.next() {
+                result.push(next_character);
+                num_added += 1;
+            }
+        }
+        self.backup(num_added);
+        return result;
+    }
+
     pub fn emit(&mut self, token: Token) {
         self.start_position = self.position;
         self.tokens.send(token).unwrap();
@@ -263,11 +279,8 @@ impl<R: io::Read> Lexer<R> {
             .to_string();
     }
 
-    pub fn emit_error(
-        &mut self,
-        error: impl std::error::Error + Send + Sync + 'static,
-    ) -> StateFunction<R> {
-        self.tokens.send(Token::Error(Error::new(error))).unwrap();
+    pub fn emit_error(&mut self, error: LexerError) -> StateFunction<R> {
+        self.tokens.send(Token::Error(error.into())).unwrap();
         return None;
     }
 }
