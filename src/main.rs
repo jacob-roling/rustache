@@ -1,9 +1,13 @@
 use std::{
-    io::{BufReader, Cursor},
+    io::{BufReader, BufWriter, Cursor, Write},
     thread,
 };
 
-use rustache::{lexer::lex, parser::parse};
+use rustache::{
+    lexer::lex,
+    node::{Data, Value},
+    parser::parse,
+};
 
 fn main() {
     // println!("{:#?}", templates("views", "**/*.mustache"));
@@ -26,7 +30,22 @@ fn main() {
     match template_handle.join() {
         Ok(result) => match result {
             Ok(node) => {
-                println!("{:#?}", node);
+                let mut result = Vec::new();
+                let mut writer = BufWriter::new(&mut result);
+
+                node.render(
+                    &mut writer,
+                    &Data::from([
+                        ("greeting".into(), Value::String("world".into())),
+                        ("test_lambda".into(), Value::Lambda(test_lambda)),
+                    ]),
+                );
+
+                writer.flush().unwrap();
+
+                drop(writer);
+
+                println!("{:#?}", String::from_utf8(result).unwrap());
             }
             Err(e) => {
                 println!("{:#?}", e);
@@ -36,4 +55,8 @@ fn main() {
             println!("{:#?}", e);
         }
     }
+}
+
+fn test_lambda(_current_context: Option<Data>) -> String {
+    return String::from("test_lambda");
 }

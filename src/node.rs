@@ -1,4 +1,26 @@
-use std::io::{BufWriter, Write};
+use std::{
+    collections::HashMap,
+    io::{BufWriter, Write},
+};
+
+use thiserror::Error;
+
+pub type Data = HashMap<String, Value>;
+
+pub enum Value {
+    String(String),
+    Number(f32),
+    Array(Vec<Value>),
+    Bool(bool),
+    Object(Data),
+    Lambda(fn(current_context: Option<Data>) -> String),
+}
+
+#[derive(Error, Debug)]
+pub enum RenderError {
+    #[error("identifier does not exist in context")]
+    IdentifierDoesNotExist,
+}
 
 #[derive(Debug)]
 pub enum Node {
@@ -21,42 +43,35 @@ pub enum Node {
     },
     Block {
         identifier: String,
+        children: Vec<Node>,
     },
     Parent {
         identifier: String,
         dynamic: bool,
+        children: Vec<Node>,
     },
 }
 
 impl Node {
-    fn render(&self, writer: &mut BufWriter<impl std::io::Write>) {
+    pub fn render(
+        &self,
+        writer: &mut BufWriter<impl std::io::Write>,
+        data: &Data,
+    ) -> Option<RenderError> {
         match self {
             Node::Root(children) => {
                 for i in 0..children.len() {
-                    children[i].render(writer);
+                    children[i].render(writer, data);
                 }
             }
-            Node::Section {
-                identifier,
-                inverted,
-                children,
-            } => todo!(),
-            Node::Variable {
-                identifier,
-                escaped,
-            } => todo!(),
-            Node::Text(_) => todo!(),
-            Node::Implicit => todo!(),
-            Node::Comment(_) => todo!(),
-            Node::Partial {
-                identifier,
-                dynamic,
-            } => todo!(),
-            Node::Block { identifier } => todo!(),
-            Node::Parent {
-                identifier,
-                dynamic,
-            } => todo!(),
+            Node::Text(text) => {
+                writer.write(text.as_bytes()).unwrap();
+            }
+            _ Node::Variable{ identifier, escaped } => {
+                writer.write(text.as_bytes()).unwrap();
+            }
+            _ => {}
         }
+        return None;
     }
 }
