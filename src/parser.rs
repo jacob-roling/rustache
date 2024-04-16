@@ -65,8 +65,11 @@ pub fn parse(token_reciever: Receiver<Token>) -> Result<Node, ParserError> {
             Token::OpenDelimiter => {
                 if let Some(token) = parser.next() {
                     match token {
-                        Token::Identifier(_) => {
-                            let node = parse_variable(&mut parser);
+                        Token::Identifier(identifier) => {
+                            children.push(Node::Variable {
+                                identifier: identifier.into(),
+                                escaped: true,
+                            });
                         }
                         Token::Section => {}
                         Token::Implicit => {}
@@ -75,15 +78,33 @@ pub fn parse(token_reciever: Receiver<Token>) -> Result<Node, ParserError> {
                         Token::Partial => {}
                         Token::Block => {}
                         Token::Parent => {}
-                        Token::SetDelimiter => {}
-                        Token::Raw => {}
+                        Token::Raw => {
+                            if let Some(token) = parser.next() {
+                                match token {
+                                    Token::Identifier(identifier) => {
+                                        children.push(Node::Variable {
+                                            identifier: identifier.into(),
+                                            escaped: false,
+                                        });
+                                    }
+                                    _ => {
+                                        return Err(ParserError::UnexpectedToken);
+                                    }
+                                }
+                            }
+                        }
                         _ => {
                             return Err(ParserError::UnexpectedToken);
                         }
                     }
                 }
             }
-            _ => {}
+            Token::CloseDelimiter => {}
+            Token::SetDelimiter => {}
+            Token::EOF => {}
+            _ => {
+                return Err(ParserError::UnexpectedToken);
+            }
         }
     }
 
