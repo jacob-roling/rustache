@@ -30,9 +30,11 @@ impl Parser {
 pub fn parse(token_reciever: Receiver<Token>) -> Result<Node, ParserError> {
     let parser = Parser::new(token_reciever);
 
+    let children = Vec::new();
+
     while let Ok(token) = parser.tokens.recv() {
         println!("{:#?}", token);
     }
 
-    return Ok(Node::Root(Vec::new()));
+    return Ok(Node::Root(children));
 }

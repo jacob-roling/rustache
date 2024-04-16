@@ -54,7 +54,7 @@ pub struct Lexer<R> {
     raw_close_delimiter_chars: usize,
 }
 
-pub trait State<R> {
+trait State<R> {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R>;
 }
 
@@ -314,7 +314,7 @@ impl<R: io::Read> State<R> for LexNewDelimiter {
 }
 
 impl<R: io::Read> Lexer<R> {
-    pub fn new(reader: BufReader<R>, sender: Sender<Token>) -> Self {
+    fn new(reader: BufReader<R>, sender: Sender<Token>) -> Self {
         let open_delimiter = String::from("{{");
         let close_delimiter = String::from("}}");
 
@@ -333,7 +333,7 @@ impl<R: io::Read> Lexer<R> {
         };
     }
 
-    pub fn next(&mut self) -> Option<char> {
+    fn next(&mut self) -> Option<char> {
         match self.reader.fill_buf() {
             Ok(buffer) => {
                 let length = buffer.len();
@@ -361,7 +361,7 @@ impl<R: io::Read> Lexer<R> {
         return Some(character);
     }
 
-    pub fn nextn(&mut self, count: usize) -> String {
+    fn nextn(&mut self, count: usize) -> String {
         let mut result = String::new();
         for _ in 0..count {
             let Some(next_character) = self.next() else {
@@ -372,21 +372,21 @@ impl<R: io::Read> Lexer<R> {
         return result;
     }
 
-    pub fn ignore(&mut self) {
+    fn ignore(&mut self) {
         self.start_position = self.position;
     }
 
-    pub fn backup(&mut self, characters: usize) {
+    fn backup(&mut self, characters: usize) {
         self.position -= characters;
     }
 
-    pub fn peek(&mut self) -> Option<char> {
-        let next_characteracter = self.next();
-        self.backup(1);
-        return next_characteracter;
-    }
+    // fn peek(&mut self) -> Option<char> {
+    //     let next_characteracter = self.next();
+    //     self.backup(1);
+    //     return next_characteracter;
+    // }
 
-    pub fn peekn(&mut self, count: usize) -> String {
+    fn peekn(&mut self, count: usize) -> String {
         let mut result = String::new();
         let mut num_added = 0;
         for _ in 0..count {
@@ -399,24 +399,24 @@ impl<R: io::Read> Lexer<R> {
         return result;
     }
 
-    pub fn emit(&mut self, token: Token) {
+    fn emit(&mut self, token: Token) {
         self.start_position = self.position;
         self.tokens.send(token).unwrap();
     }
 
-    pub fn current(&self) -> String {
+    fn current(&self) -> String {
         return self
             .buffer
             .substring(self.start_position, self.position)
             .to_string();
     }
 
-    pub fn emit_error(&mut self, error: LexerError) -> StateFunction<R> {
+    fn emit_error(&mut self, error: LexerError) -> StateFunction<R> {
         self.tokens.send(Token::Error(error.into())).unwrap();
         return None;
     }
 
-    pub fn accept(&mut self, character_set: &str) -> bool {
+    fn accept(&mut self, character_set: &str) -> bool {
         if let Some(next_characteracter) = self.next() {
             if character_set.contains(next_characteracter) {
                 return true;
@@ -426,7 +426,7 @@ impl<R: io::Read> Lexer<R> {
         return false;
     }
 
-    pub fn accept_run(&mut self, character_set: &str) {
+    fn accept_run(&mut self, character_set: &str) {
         while let Some(next_characteracter) = self.next() {
             if !character_set.contains(next_characteracter) {
                 break;
@@ -435,7 +435,7 @@ impl<R: io::Read> Lexer<R> {
         self.backup(1);
     }
 
-    pub fn set_delimiters(&mut self, open_delimiter: String, close_delimiter: String) {
+    fn set_delimiters(&mut self, open_delimiter: String, close_delimiter: String) {
         self.open_delimiter = open_delimiter;
         self.open_delimiter_chars = self.open_delimiter.chars().count();
         self.close_delimiter = close_delimiter;
