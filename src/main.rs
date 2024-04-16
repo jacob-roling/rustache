@@ -1,24 +1,19 @@
 use std::{
-    fs::File,
     io::{BufReader, Cursor},
-    sync::mpsc,
     thread,
 };
 
-use rustache::{
-    lexer::{lex, Token},
-    templates,
-};
+use rustache::lexer::lex;
 
 fn main() {
     // println!("{:#?}", templates("views", "**/*.mustache"));
     // let file = File::open("test.mustache").expect("Failed to open file");
     // let reader = BufReader::with_capacity(64, file);
-    let (sender, reciever) = mpsc::sync_channel::<Token>(2);
+    let (sender, reciever) = crossbeam_channel::bounded(2);
 
     thread::spawn(move || {
-        let input = String::from("asdas{{.}}");
-        let reader = BufReader::with_capacity(64, Cursor::new(input));
+        let input = String::from("{{default_tags}}{{=<% %>=}}<%new_tags%>");
+        let reader = BufReader::with_capacity(128, Cursor::new(input));
         lex(reader, sender);
     });
 

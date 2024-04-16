@@ -1,11 +1,13 @@
 use anyhow::Error;
-use core::{fmt, num};
-use std::{
-    io::{self, BufRead, BufReader},
-    sync::mpsc::SyncSender,
-};
+use crossbeam_channel::Sender;
+use std::io::{self, BufRead, BufReader};
 use substring::Substring;
 use thiserror::Error;
+
+const NEWLINE_CHARACTER: char = 0xA as char;
+const VALID_IDENTIFIER_CHARACTER_SET: &str =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.?_";
+const VALID_DELIMITER_CHARACTER_SET: &str = "<>%()@";
 
 #[derive(Debug)]
 pub enum Token {
@@ -25,8 +27,6 @@ pub enum Token {
     Parent,
     SetDelimiter,
     Raw,
-    OpenRawDelimiter,
-    CloseRawDelimiter,
     SectionEnd,
 }
 
@@ -43,11 +43,15 @@ pub enum LexerError {
 pub struct Lexer<R> {
     input: BufReader<R>,
     buffer: String,
-    tokens: SyncSender<Token>,
+    tokens: Sender<Token>,
     start_position: usize,
     position: usize,
     open_delimiter: String,
+    open_delimiter_chars: usize,
     close_delimiter: String,
+    close_delimiter_chars: usize,
+    raw_close_delimiter: String,
+    raw_close_delimiter_chars: usize,
 }
 
 pub trait State<R> {
@@ -56,7 +60,7 @@ pub trait State<R> {
 
 type StateFunction<R> = Option<Box<dyn State<R>>>;
 
-pub fn lex<R: io::Read>(input: BufReader<R>, sender: SyncSender<Token>) {
+pub fn lex<R: io::Read>(input: BufReader<R>, sender: Sender<Token>) {
     let mut lexer = Lexer::new(input, sender);
     let mut state_function: StateFunction<R> = Some(Box::new(LexText));
     while let Some(mut state) = state_function {
@@ -68,14 +72,9 @@ struct LexText;
 
 impl<R: io::Read> State<R> for LexText {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
-        println!("TEXT {}", lexer.current());
-        for _ in lexer.current().len()..lexer.open_delimiter.len() {
-            lexer.next();
-        }
         loop {
-            if lexer.current().ends_with(lexer.open_delimiter.as_str()) {
+            if lexer.peekn(lexer.open_delimiter_chars) == lexer.open_delimiter {
                 if lexer.position > lexer.start_position {
-                    lexer.backup(lexer.open_delimiter.len());
                     lexer.emit(Token::Text(lexer.current()));
                 }
                 return Some(Box::new(LexOpenDelimiter));
@@ -96,9 +95,7 @@ struct LexOpenDelimiter;
 
 impl<R: io::Read> State<R> for LexOpenDelimiter {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
-        println!("OPEN DELIM");
-        lexer.next();
-        lexer.next();
+        lexer.nextn(lexer.open_delimiter_chars);
         lexer.emit(Token::OpenDelimiter);
         return Some(Box::new(LexInsideDelimiter));
     }
@@ -108,59 +105,62 @@ struct LexInsideDelimiter;
 
 impl<R: io::Read> State<R> for LexInsideDelimiter {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
-        println!("INSIDE DELIM");
-        loop {
-            if lexer.peekn(lexer.close_delimiter.len()) == lexer.close_delimiter {
-                println!("ASSAD {}", lexer.current());
-                lexer.backup(lexer.close_delimiter.len());
-                return Some(Box::new(LexCloseDelimiter));
-            }
-            match lexer.next() {
-                Some(next_char) => match next_char {
-                    '#' => {
-                        lexer.emit(Token::Section);
-                        return Some(Box::new(LexIdentifier));
-                    }
-                    '.' => {
-                        lexer.emit(Token::Implicit);
-                        return Some(Box::new(LexCloseDelimiter));
-                    }
-                    '!' => {
-                        return Some(Box::new(LexComment));
-                    }
-                    '/' => {
-                        lexer.emit(Token::SectionEnd);
-                        return Some(Box::new(LexIdentifier));
-                    }
-                    '$' => {
-                        lexer.emit(Token::Block);
-                        return Some(Box::new(LexIdentifier));
-                    }
-                    '^' => {
-                        lexer.emit(Token::InvertedSection);
-                        return Some(Box::new(LexIdentifier));
-                    }
-                    '<' => {
-                        lexer.emit(Token::Parent);
-                        return Some(Box::new(LexIdentifier));
-                    }
-                    '{' => {
-                        lexer.emit(Token::OpenRawDelimiter);
-                        return Some(Box::new(LexIdentifier));
-                    }
-                    '&' => {
-                        lexer.emit(Token::Raw);
-                        return Some(Box::new(LexIdentifier));
-                    }
-                    next_char if next_char == 0xA as char => {
-                        return lexer.emit_error(LexerError::UnexpectedCharacter)
-                    }
-                    next_char if next_char.is_whitespace() => lexer.ignore(),
-                    _ => return lexer.emit_error(LexerError::UnexpectedCharacter),
-                },
-                None => return lexer.emit_error(LexerError::UnexpectedEOF),
-            };
-        }
+        return match lexer.next() {
+            Some(next_character) => match next_character {
+                '#' => {
+                    lexer.emit(Token::Section);
+                    return Some(Box::new(LexIdentifier));
+                }
+                '.' => {
+                    lexer.emit(Token::Implicit);
+                    return Some(Box::new(LexCloseDelimiter));
+                }
+                '!' => {
+                    return Some(Box::new(LexComment));
+                }
+                '/' => {
+                    lexer.emit(Token::SectionEnd);
+                    return Some(Box::new(LexIdentifier));
+                }
+                '$' => {
+                    lexer.emit(Token::Block);
+                    return Some(Box::new(LexIdentifier));
+                }
+                '^' => {
+                    lexer.emit(Token::InvertedSection);
+                    return Some(Box::new(LexIdentifier));
+                }
+                '<' => {
+                    lexer.emit(Token::Parent);
+                    return Some(Box::new(LexIdentifier));
+                }
+                '{' => {
+                    lexer.emit(Token::Raw);
+                    return Some(Box::new(LexRawIdentifier));
+                }
+                '&' => {
+                    lexer.emit(Token::Raw);
+                    return Some(Box::new(LexIdentifier));
+                }
+                '>' => {
+                    lexer.emit(Token::Partial);
+                    return Some(Box::new(LexIdentifier));
+                }
+                '=' => {
+                    lexer.emit(Token::SetDelimiter);
+                    return Some(Box::new(LexNewDelimiter));
+                }
+                next_character if next_character == NEWLINE_CHARACTER => {
+                    return lexer.emit_error(LexerError::UnclosedDelimiter)
+                }
+                next_character if next_character.is_alphanumeric() => {
+                    lexer.backup(1);
+                    return Some(Box::new(LexIdentifier));
+                }
+                _ => lexer.emit_error(LexerError::UnexpectedCharacter),
+            },
+            None => lexer.emit_error(LexerError::UnexpectedEOF),
+        };
     }
 }
 
@@ -168,11 +168,23 @@ struct LexCloseDelimiter;
 
 impl<R: io::Read> State<R> for LexCloseDelimiter {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
-        println!("CLOSE DELIM");
-        lexer.next();
-        lexer.next();
-        lexer.emit(Token::CloseDelimiter);
-        return Some(Box::new(LexText));
+        // Ignore whitespace
+        lexer.accept_run(" ");
+        lexer.ignore();
+
+        // Peek to see if we have reached a closing delimiter
+        if lexer.peekn(lexer.close_delimiter_chars) == lexer.close_delimiter {
+            lexer.ignore();
+            lexer.nextn(lexer.close_delimiter_chars);
+            lexer.emit(Token::CloseDelimiter);
+            return Some(Box::new(LexText));
+        }
+
+        // If not, we either hit an unexpected character or EOF
+        return match lexer.next() {
+            None => lexer.emit_error(LexerError::UnexpectedEOF),
+            _ => lexer.emit_error(LexerError::UnexpectedCharacter),
+        };
     }
 }
 
@@ -180,7 +192,36 @@ struct LexIdentifier;
 
 impl<R: io::Read> State<R> for LexIdentifier {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
-        return None;
+        // Ignore whitespace
+        lexer.accept_run(" ");
+        lexer.ignore();
+
+        // Check if identifier is dynamic
+        if lexer.accept("*") {
+            lexer.emit(Token::Dynamic);
+        }
+
+        // Consume valid characters and emit
+        lexer.accept_run(VALID_IDENTIFIER_CHARACTER_SET);
+        lexer.emit(Token::Identifier(lexer.current()));
+
+        return Some(Box::new(LexCloseDelimiter));
+    }
+}
+
+struct LexRawIdentifier;
+
+impl<R: io::Read> State<R> for LexRawIdentifier {
+    fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
+        // Ignore whitespace
+        lexer.accept_run(" ");
+        lexer.ignore();
+
+        // Consume valid characters and emit
+        lexer.accept_run(VALID_IDENTIFIER_CHARACTER_SET);
+        lexer.emit(Token::Identifier(lexer.current()));
+
+        return Some(Box::new(LexCloseRawDelimiter));
     }
 }
 
@@ -188,7 +229,19 @@ struct LexComment;
 
 impl<R: io::Read> State<R> for LexComment {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
-        return None;
+        lexer.ignore();
+        loop {
+            if lexer.peekn(lexer.close_delimiter_chars) == lexer.close_delimiter {
+                lexer.emit(Token::Comment(lexer.current()));
+                lexer.nextn(lexer.close_delimiter_chars);
+                lexer.emit(Token::CloseDelimiter);
+                return Some(Box::new(LexText));
+            }
+            if lexer.next().is_none() {
+                break;
+            }
+        }
+        return lexer.emit_error(LexerError::UnexpectedEOF);
     }
 }
 
@@ -196,20 +249,87 @@ struct LexCloseRawDelimiter;
 
 impl<R: io::Read> State<R> for LexCloseRawDelimiter {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
-        return None;
+        // Ignore whitespace
+        lexer.accept_run(" ");
+        lexer.ignore();
+
+        // Peek to see if we have reached a raw closing delimiter
+        if lexer.peekn(lexer.raw_close_delimiter_chars) == lexer.raw_close_delimiter {
+            lexer.nextn(lexer.raw_close_delimiter_chars);
+            lexer.emit(Token::CloseDelimiter);
+            return Some(Box::new(LexText));
+        }
+
+        // If not, we either hit an unexpected character or EOF
+        return match lexer.next() {
+            None => lexer.emit_error(LexerError::UnexpectedEOF),
+            _ => lexer.emit_error(LexerError::UnexpectedCharacter),
+        };
+    }
+}
+
+struct LexNewDelimiter;
+
+impl<R: io::Read> State<R> for LexNewDelimiter {
+    fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
+        // Ignore whitespace
+        lexer.accept_run(" ");
+        lexer.ignore();
+
+        // Consume valid characters and set new open delimiter
+        lexer.accept_run(VALID_DELIMITER_CHARACTER_SET);
+        let new_open_delimiter = lexer.current();
+        lexer.ignore();
+
+        if !lexer.accept(" ") {
+            return lexer.emit_error(LexerError::UnexpectedCharacter);
+        }
+        lexer.ignore();
+
+        // Consume valid characters and set new close delimiter
+        lexer.accept_run(VALID_DELIMITER_CHARACTER_SET);
+        let new_close_delimiter = lexer.current();
+        lexer.ignore();
+
+        if !lexer.accept("=") {
+            return lexer.emit_error(LexerError::UnexpectedCharacter);
+        }
+
+        // Peek to see if we have reached the old closing delimiter
+        if lexer.peekn(lexer.close_delimiter_chars) == lexer.close_delimiter {
+            lexer.ignore();
+            lexer.nextn(lexer.close_delimiter_chars);
+            lexer.emit(Token::CloseDelimiter);
+            // Set new delimiters
+            lexer.set_delimiters(new_open_delimiter, new_close_delimiter);
+            return Some(Box::new(LexText));
+        }
+
+        // If not, we either hit an unexpected character or EOF
+        return match lexer.next() {
+            None => lexer.emit_error(LexerError::UnexpectedEOF),
+            _ => lexer.emit_error(LexerError::UnexpectedCharacter),
+        };
     }
 }
 
 impl<R: io::Read> Lexer<R> {
-    pub fn new(input: BufReader<R>, sender: SyncSender<Token>) -> Self {
+    pub fn new(input: BufReader<R>, sender: Sender<Token>) -> Self {
+        let open_delimiter = String::from("{{");
+        let close_delimiter = String::from("}}");
+
         return Self {
             input,
             buffer: String::new(),
             tokens: sender,
             start_position: 0,
             position: 0,
-            open_delimiter: "{{".to_string(),
-            close_delimiter: "}}".to_string(),
+            open_delimiter: open_delimiter.clone(),
+            open_delimiter_chars: open_delimiter.chars().count(),
+            close_delimiter: close_delimiter.clone(),
+            close_delimiter_chars: close_delimiter.chars().count(),
+            raw_close_delimiter: String::from("}}}"),
+            raw_close_delimiter_chars: 3,
         };
     }
 
@@ -220,6 +340,7 @@ impl<R: io::Read> Lexer<R> {
                 if length > 0 {
                     match std::str::from_utf8(buffer) {
                         Ok(next_string) => {
+                            // println!("READ IN: {}", next_string);
                             self.buffer.push_str(next_string);
                         }
                         Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
@@ -240,6 +361,17 @@ impl<R: io::Read> Lexer<R> {
         return Some(character);
     }
 
+    pub fn nextn(&mut self, count: usize) -> String {
+        let mut result = String::new();
+        for _ in 0..count {
+            let Some(next_character) = self.next() else {
+                break;
+            };
+            result.push(next_character);
+        }
+        return result;
+    }
+
     pub fn ignore(&mut self) {
         self.start_position = self.position;
     }
@@ -249,17 +381,17 @@ impl<R: io::Read> Lexer<R> {
     }
 
     pub fn peek(&mut self) -> Option<char> {
-        let next_character = self.next();
+        let next_characteracter = self.next();
         self.backup(1);
-        return next_character;
+        return next_characteracter;
     }
 
     pub fn peekn(&mut self, count: usize) -> String {
         let mut result = String::new();
         let mut num_added = 0;
         for _ in 0..count {
-            if let Some(next_character) = self.next() {
-                result.push(next_character);
+            if let Some(next_characteracter) = self.next() {
+                result.push(next_characteracter);
                 num_added += 1;
             }
         }
@@ -282,5 +414,35 @@ impl<R: io::Read> Lexer<R> {
     pub fn emit_error(&mut self, error: LexerError) -> StateFunction<R> {
         self.tokens.send(Token::Error(error.into())).unwrap();
         return None;
+    }
+
+    pub fn accept(&mut self, character_set: &str) -> bool {
+        if let Some(next_characteracter) = self.next() {
+            if character_set.contains(next_characteracter) {
+                return true;
+            }
+        }
+        self.backup(1);
+        return false;
+    }
+
+    pub fn accept_run(&mut self, character_set: &str) {
+        while let Some(next_characteracter) = self.next() {
+            if !character_set.contains(next_characteracter) {
+                break;
+            }
+        }
+        self.backup(1);
+    }
+
+    pub fn set_delimiters(&mut self, open_delimiter: String, close_delimiter: String) {
+        self.open_delimiter = open_delimiter;
+        self.open_delimiter_chars = self.open_delimiter.chars().count();
+        self.close_delimiter = close_delimiter;
+        self.close_delimiter_chars = self.close_delimiter.chars().count();
+        let mut raw_close_delimiter = self.close_delimiter.clone();
+        raw_close_delimiter.insert(0, '}');
+        self.raw_close_delimiter = raw_close_delimiter;
+        self.raw_close_delimiter_chars = self.raw_close_delimiter.chars().count();
     }
 }
