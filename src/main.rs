@@ -1,13 +1,10 @@
 use std::{
+    collections::HashMap,
     io::{BufReader, BufWriter, Cursor, Write},
     thread,
 };
 
-use rustache::{
-    lexer::lex,
-    node::{Data, Value},
-    parser::parse,
-};
+use rustache::{lexer::lex, node::Value, parser::parse};
 
 fn main() {
     // println!("{:#?}", templates("views", "**/*.mustache"));
@@ -18,7 +15,7 @@ fn main() {
 
     thread::spawn(move || {
         // let input = String::from("{{default_tags}}{{=<% %>=}}<%new_tags%>");
-        let input = String::from("Hello {{greeting}}");
+        let input = String::from("{{#section}}{{.}}{{/section}}");
         let reader = BufReader::with_capacity(128, Cursor::new(input));
         lex(reader, token_sender);
     });
@@ -27,36 +24,29 @@ fn main() {
         return parse(token_reciever);
     });
 
-    match template_handle.join() {
-        Ok(result) => match result {
-            Ok(node) => {
-                let mut result = Vec::new();
-                let mut writer = BufWriter::new(&mut result);
+    match template_handle
+        .join()
+        .expect("Couldn't join on the associated thread")
+    {
+        Ok(node) => {
+            println!("{:#?}", node);
+            // let mut result = Vec::new();
+            // let mut writer = BufWriter::new(&mut result);
 
-                node.render(
-                    &mut writer,
-                    &Data::from([
-                        ("greeting".into(), Value::String("world".into())),
-                        ("test_lambda".into(), Value::Lambda(test_lambda)),
-                    ]),
-                );
+            // node.render(
+            //     &mut writer,
+            //     &Value::Object(HashMap::<String, Value>::from([(
+            //         "greeting".into(),
+            //         Value::String("world".into()),
+            //     )])),
+            // );
 
-                writer.flush().unwrap();
+            // writer.flush().unwrap();
 
-                drop(writer);
+            // drop(writer);
 
-                println!("{:#?}", String::from_utf8(result).unwrap());
-            }
-            Err(e) => {
-                println!("{:#?}", e);
-            }
-        },
-        Err(e) => {
-            println!("{:#?}", e);
+            // println!("{:#?}", String::from_utf8(result).unwrap());
         }
-    }
-}
-
-fn test_lambda(_current_context: Option<Data>) -> String {
-    return String::from("test_lambda");
+        Err(e) => println!("{:#?}", e),
+    };
 }

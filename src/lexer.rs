@@ -401,7 +401,10 @@ impl<R: io::Read> Lexer<R> {
 
     fn emit(&mut self, token: Token) {
         self.start_position = self.position;
-        self.tokens.send(token).unwrap();
+
+        if let Err(error) = self.tokens.send(token) {
+            panic!("{}", error);
+        }
     }
 
     fn current(&self) -> String {

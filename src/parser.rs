@@ -8,25 +8,31 @@ use crate::{lexer::Token, node::Node};
 pub enum ParserError {
     #[error("unexpected token")]
     UnexpectedToken,
+    #[error("unclosed section")]
+    UnclosedSection,
 }
 
-pub struct Parser {
+trait Parser {
+    fn next(&mut self) -> Option<&Token>;
+}
+
+pub struct ChanneledParser {
     tokens: Receiver<Token>,
     buffer: Vec<Token>,
-    start_position: usize,
     position: usize,
 }
 
-impl Parser {
+impl ChanneledParser {
     fn new(tokens: Receiver<Token>) -> Self {
         return Self {
             tokens,
             buffer: Vec::new(),
-            start_position: 0,
             position: 0,
         };
     }
+}
 
+impl Parser for ChanneledParser {
     fn next(&mut self) -> Option<&Token> {
         if let Ok(token) = self.tokens.recv() {
             self.buffer.push(token);
@@ -41,29 +47,51 @@ impl Parser {
 
         return Some(token);
     }
+}
 
-    // fn peek(&mut self) -> Option<&Token> {
-    //     let maybe_token = self.next();
-    //     self.backup(1);
-    //     return maybe_token;
-    // }
+struct NestedParser {
+    buffer: Vec<Token>,
+    position: usize,
+}
 
-    // fn backup(&mut self, count: usize) {
-    //     self.position -= count;
-    // }
+impl NestedParser {
+    fn new(buffer: Vec<Token>) -> Self {
+        return Self {
+            buffer,
+            position: 0,
+        };
+    }
+}
+
+impl Parser for NestedParser {
+    fn next(&mut self) -> Option<&Token> {
+        if self.position >= self.buffer.len() {
+            return None;
+        }
+
+        let token = &self.buffer[self.position];
+        self.position += 1;
+
+        return Some(token);
+    }
 }
 
 pub fn parse(token_reciever: Receiver<Token>) -> Result<Node, ParserError> {
-    let mut parser = Parser::new(token_reciever);
+    let parser = ChanneledParser::new(token_reciever);
+    return internal_parse(parser);
+}
 
+fn internal_parse(mut parser: impl Parser) -> Result<Node, ParserError> {
+    let mut error = None;
     let mut children = Vec::new();
 
-    while let Some(token) = parser.next() {
+    'outer: while let Some(token) = parser.next() {
         match token {
             Token::Error(_) => {}
-            Token::Text(value) => children.push(Node::Text(value.clone())),
+            Token::Text(value) => children.push(Node::Text(value.into())),
             Token::OpenDelimiter => {
                 if let Some(token) = parser.next() {
+                    println!("{:#?}", token);
                     match token {
                         Token::Identifier(identifier) => {
                             children.push(Node::Variable {
@@ -71,9 +99,25 @@ pub fn parse(token_reciever: Receiver<Token>) -> Result<Node, ParserError> {
                                 escaped: true,
                             });
                         }
-                        Token::Section => {}
+                        Token::Section => match parse_section(&mut parser, false) {
+                            Ok(node) => {
+                                children.push(node);
+                            }
+                            Err(e) => {
+                                error = Some(e);
+                                break 'outer;
+                            }
+                        },
                         Token::Implicit => {}
-                        Token::InvertedSection => {}
+                        Token::InvertedSection => match parse_section(&mut parser, true) {
+                            Ok(node) => {
+                                children.push(node);
+                            }
+                            Err(e) => {
+                                error = Some(e);
+                                break 'outer;
+                            }
+                        },
                         Token::Comment(_) => {}
                         Token::Partial => {}
                         Token::Block => {}
@@ -88,13 +132,15 @@ pub fn parse(token_reciever: Receiver<Token>) -> Result<Node, ParserError> {
                                         });
                                     }
                                     _ => {
-                                        return Err(ParserError::UnexpectedToken);
+                                        error = Some(ParserError::UnexpectedToken);
+                                        break 'outer;
                                     }
                                 }
                             }
                         }
                         _ => {
-                            return Err(ParserError::UnexpectedToken);
+                            error = Some(ParserError::UnexpectedToken);
+                            break 'outer;
                         }
                     }
                 }
@@ -108,9 +154,62 @@ pub fn parse(token_reciever: Receiver<Token>) -> Result<Node, ParserError> {
         }
     }
 
-    return Ok(Node::Root(children));
+    while let Some(token) = parser.next() {}
+
+    return match error {
+        Some(e) => Err(e),
+        None => Ok(Node::Root(children)),
+    };
 }
 
-fn parse_variable(parser: &mut Parser) -> Result<Node, ParserError> {
-    return Ok(Node::Implicit);
+fn parse_section(parser: &mut impl Parser, inverted: bool) -> Result<Node, ParserError> {
+    if let Some(token) = parser.next() {
+        match token {
+            Token::Identifier(open_identifier) => {
+                let mut nested_token_buffer = Vec::new();
+                let section_identifier = &open_identifier.clone();
+
+                while let Some(token) = parser.next() {
+                    match token {
+                        Token::SectionEnd => {
+                            if let Some(token) = parser.next() {
+                                match token {
+                                    Token::Identifier(close_identifier) => {
+                                        if section_identifier == close_identifier {
+                                            let nested_parser =
+                                                NestedParser::new(nested_token_buffer);
+
+                                            match internal_parse(nested_parser) {
+                                                Ok(section_root) => {
+                                                    if let Node::Root(section_children) =
+                                                        section_root
+                                                    {
+                                                        return Ok(Node::Section {
+                                                            identifier: section_identifier.into(),
+                                                            inverted,
+                                                            children: section_children,
+                                                        });
+                                                    }
+                                                }
+                                                Err(error) => return Err(error),
+                                            }
+                                        } else {
+                                            nested_token_buffer.push(token);
+                                        }
+                                    }
+                                    _ => return Err(ParserError::UnexpectedToken),
+                                }
+                            }
+                        }
+                        _ => {
+                            nested_token_buffer.push(token);
+                        }
+                    }
+                }
+            }
+            _ => return Err(ParserError::UnexpectedToken),
+        }
+    }
+
+    return Err(ParserError::UnexpectedToken);
 }
