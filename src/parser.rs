@@ -1,20 +1,38 @@
-use std::sync::mpsc::Receiver;
+use anyhow::Result;
+use crossbeam_channel::Receiver;
+use thiserror::Error;
 
-use crate::lexer::Token;
+use crate::{lexer::Token, node::Node};
 
 pub struct Parser {
-    input: Receiver<Token>,
+    tokens: Receiver<Token>,
+}
+
+#[derive(Error, Debug)]
+pub enum ParserError {
+    #[error("test")]
+    Test,
 }
 
 impl Parser {
-    pub fn new(input: Receiver<Token>) -> Self {
-        return Self { input };
+    pub fn new(tokens: Receiver<Token>) -> Self {
+        return Self { tokens };
     }
 
     pub fn next(&self) -> Token {
-        return match self.input.recv() {
-            Ok(lexeme) => lexeme,
-            Err(e) => panic!("Receiving lexeme: {}", e),
+        return match self.tokens.recv() {
+            Ok(token) => token,
+            Err(e) => panic!("{}", e),
         };
     }
+}
+
+pub fn parse(token_reciever: Receiver<Token>) -> Result<Node, ParserError> {
+    let parser = Parser::new(token_reciever);
+
+    while let Ok(token) = parser.tokens.recv() {
+        println!("{:#?}", token);
+    }
+
+    return Ok(Node::Root(Vec::new()));
 }

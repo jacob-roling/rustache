@@ -41,7 +41,7 @@ pub enum LexerError {
 }
 
 pub struct Lexer<R> {
-    input: BufReader<R>,
+    reader: BufReader<R>,
     buffer: String,
     tokens: Sender<Token>,
     start_position: usize,
@@ -60,8 +60,8 @@ pub trait State<R> {
 
 type StateFunction<R> = Option<Box<dyn State<R>>>;
 
-pub fn lex<R: io::Read>(input: BufReader<R>, sender: Sender<Token>) {
-    let mut lexer = Lexer::new(input, sender);
+pub fn lex<R: io::Read>(reader: BufReader<R>, sender: Sender<Token>) {
+    let mut lexer = Lexer::new(reader, sender);
     let mut state_function: StateFunction<R> = Some(Box::new(LexText));
     while let Some(mut state) = state_function {
         state_function = state.next(&mut lexer);
@@ -314,12 +314,12 @@ impl<R: io::Read> State<R> for LexNewDelimiter {
 }
 
 impl<R: io::Read> Lexer<R> {
-    pub fn new(input: BufReader<R>, sender: Sender<Token>) -> Self {
+    pub fn new(reader: BufReader<R>, sender: Sender<Token>) -> Self {
         let open_delimiter = String::from("{{");
         let close_delimiter = String::from("}}");
 
         return Self {
-            input,
+            reader,
             buffer: String::new(),
             tokens: sender,
             start_position: 0,
@@ -334,7 +334,7 @@ impl<R: io::Read> Lexer<R> {
     }
 
     pub fn next(&mut self) -> Option<char> {
-        match self.input.fill_buf() {
+        match self.reader.fill_buf() {
             Ok(buffer) => {
                 let length = buffer.len();
                 if length > 0 {
@@ -346,7 +346,7 @@ impl<R: io::Read> Lexer<R> {
                         Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
                     }
                 }
-                self.input.consume(length);
+                self.reader.consume(length);
             }
             Err(e) => panic!("Reading file: {}", e),
         };
