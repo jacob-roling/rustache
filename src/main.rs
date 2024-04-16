@@ -13,7 +13,8 @@ fn main() {
     let (token_sender, token_reciever) = crossbeam_channel::bounded(2);
 
     thread::spawn(move || {
-        let input = String::from("{{default_tags}}{{=<% %>=}}<%new_tags%>");
+        // let input = String::from("{{default_tags}}{{=<% %>=}}<%new_tags%>");
+        let input = String::from("Hello {{greeting}}");
         let reader = BufReader::with_capacity(128, Cursor::new(input));
         lex(reader, token_sender);
     });
