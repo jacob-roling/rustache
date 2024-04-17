@@ -1,17 +1,16 @@
-use anyhow::Error;
 use crossbeam_channel::Sender;
 use std::io::{self, BufRead, BufReader};
 use substring::Substring;
 use thiserror::Error;
 
-const NEWLINE_CHARACTER: char = 0xA as char;
 const VALID_IDENTIFIER_CHARACTER_SET: &str =
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.?_";
+
 const VALID_DELIMITER_CHARACTER_SET: &str = "<>%()@";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Token {
-    Error(Error),
+    Error(LexerError),
     EOF,
     Text(String),
     OpenDelimiter,
@@ -30,14 +29,16 @@ pub enum Token {
     SectionEnd,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum LexerError {
     #[error("unclosed delimiter")]
     UnclosedDelimiter,
     #[error("unexpected end of file")]
     UnexpectedEOF,
-    #[error("unexpected character")]
-    UnexpectedCharacter,
+    #[error("unexpected character: {0}")]
+    UnexpectedCharacter(char),
+    #[error("TODO")]
+    TODO,
 }
 
 pub struct Lexer<R> {
@@ -150,14 +151,12 @@ impl<R: io::Read> State<R> for LexInsideDelimiter {
                     lexer.emit(Token::SetDelimiter);
                     return Some(Box::new(LexNewDelimiter));
                 }
-                next_character if next_character == NEWLINE_CHARACTER => {
-                    return lexer.emit_error(LexerError::UnclosedDelimiter)
-                }
+                '\n' => return lexer.emit_error(LexerError::UnclosedDelimiter),
                 next_character if next_character.is_alphanumeric() => {
                     lexer.backup(1);
                     return Some(Box::new(LexIdentifier));
                 }
-                _ => lexer.emit_error(LexerError::UnexpectedCharacter),
+                _ => lexer.emit_error(LexerError::UnexpectedCharacter(next_character)),
             },
             None => lexer.emit_error(LexerError::UnexpectedEOF),
         };
@@ -183,7 +182,7 @@ impl<R: io::Read> State<R> for LexCloseDelimiter {
         // If not, we either hit an unexpected character or EOF
         return match lexer.next() {
             None => lexer.emit_error(LexerError::UnexpectedEOF),
-            _ => lexer.emit_error(LexerError::UnexpectedCharacter),
+            Some(character) => lexer.emit_error(LexerError::UnexpectedCharacter(character)),
         };
     }
 }
@@ -263,7 +262,7 @@ impl<R: io::Read> State<R> for LexCloseRawDelimiter {
         // If not, we either hit an unexpected character or EOF
         return match lexer.next() {
             None => lexer.emit_error(LexerError::UnexpectedEOF),
-            _ => lexer.emit_error(LexerError::UnexpectedCharacter),
+            Some(character) => lexer.emit_error(LexerError::UnexpectedCharacter(character)),
         };
     }
 }
@@ -282,7 +281,7 @@ impl<R: io::Read> State<R> for LexNewDelimiter {
         lexer.ignore();
 
         if !lexer.accept(" ") {
-            return lexer.emit_error(LexerError::UnexpectedCharacter);
+            return lexer.emit_error(LexerError::TODO);
         }
         lexer.ignore();
 
@@ -292,7 +291,7 @@ impl<R: io::Read> State<R> for LexNewDelimiter {
         lexer.ignore();
 
         if !lexer.accept("=") {
-            return lexer.emit_error(LexerError::UnexpectedCharacter);
+            return lexer.emit_error(LexerError::TODO);
         }
 
         // Peek to see if we have reached the old closing delimiter
@@ -308,7 +307,7 @@ impl<R: io::Read> State<R> for LexNewDelimiter {
         // If not, we either hit an unexpected character or EOF
         return match lexer.next() {
             None => lexer.emit_error(LexerError::UnexpectedEOF),
-            _ => lexer.emit_error(LexerError::UnexpectedCharacter),
+            Some(character) => lexer.emit_error(LexerError::UnexpectedCharacter(character)),
         };
     }
 }
@@ -379,12 +378,6 @@ impl<R: io::Read> Lexer<R> {
     fn backup(&mut self, characters: usize) {
         self.position -= characters;
     }
-
-    // fn peek(&mut self) -> Option<char> {
-    //     let next_characteracter = self.next();
-    //     self.backup(1);
-    //     return next_characteracter;
-    // }
 
     fn peekn(&mut self, count: usize) -> String {
         let mut result = String::new();

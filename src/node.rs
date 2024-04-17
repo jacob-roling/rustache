@@ -3,6 +3,7 @@ use std::{
     io::{BufWriter, Write},
 };
 
+use anyhow::Error;
 use thiserror::Error;
 
 #[derive(Debug, Clone)]

@@ -4,7 +4,7 @@ use std::{
     thread,
 };
 
-use rustache::{lexer::lex, node::Value, parser::parse};
+use rustache::{lexer::lex, node::Value, _old_parser::parse};
 
 fn main() {
     // println!("{:#?}", templates("views", "**/*.mustache"));
