@@ -43,7 +43,7 @@ pub enum RenderError {
     PartialDoesNotExist(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Node {
     Section {
         identifier: String,
@@ -149,7 +149,7 @@ impl Renderable for &Node {
             }
             Node::Partial {
                 identifier,
-                dynamic: _,
+                dynamic,
             } => {
                 if let Some(partials) = partials {
                     if let Some(partial) = partials.get(identifier) {
@@ -167,14 +167,41 @@ impl Renderable for &Node {
                 identifier,
                 dynamic,
                 children,
-            } => {}
+            } => {
+                if let Some(partials) = partials {
+                    let mut new_partials = partials.clone();
+
+                    for node in children {
+                        if let Node::Block {
+                            identifier,
+                            children,
+                        } = node
+                        {
+                            new_partials.insert(identifier.into(), children.clone());
+                        }
+                    }
+
+                    if let Some(parent_partial) = partials.get(identifier) {
+                        parent_partial.render(writable, context, Some(&new_partials));
+                    } else {
+                        return Some(RenderError::PartialDoesNotExist(identifier.into()));
+                    }
+                } else {
+                    return Some(RenderError::PartialDoesNotExist(identifier.into()));
+                }
+            }
             Node::Block {
                 identifier,
                 children,
-            } => match lookup(identifier.into(), context) {
-                Some(value) => if value.to_bool(context) {},
-                None => return Some(RenderError::IdentifierDoesNotExist(identifier.into())),
-            },
+            } => {
+                if let Some(partials) = partials {
+                    if let Some(partial) = partials.get(identifier) {
+                        partial.render(writable, context, Some(partials));
+                    } else {
+                        children.render(writable, context, Some(partials));
+                    }
+                }
+            }
         }
         return None;
     }

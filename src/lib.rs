@@ -87,9 +87,11 @@ impl Rustache {
         writable: &mut impl std::io::Write,
         context: Option<&Value>,
     ) -> Option<node::RenderError> {
-        return match self.partials.get(name) {
-            Some(partial) => partial.render(writable, context, Some(&self.partials)),
-            None => Some(RenderError::PartialDoesNotExist(name.into())),
-        };
+        if !self.partials.contains_key(name) {
+            return Some(RenderError::PartialDoesNotExist(name.into()));
+        }
+        let partial = self.partials.get(name).unwrap();
+        partial.render(writable, context, Some(&self.partials));
+        return None;
     }
 }

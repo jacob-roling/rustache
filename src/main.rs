@@ -9,7 +9,7 @@ fn main() {
     // println!("{:#?}", rustache);
 
     if let Some(error) = rustache.render(
-        "test",
+        "index",
         &mut stdout,
         Some(&Value::Object(HashMap::from([(
             "greeting".into(),
