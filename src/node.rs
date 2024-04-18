@@ -7,12 +7,12 @@ pub enum Value {
     Vec(Vec<Value>),
     Bool(bool),
     Object(HashMap<String, Value>),
-    Lambda(fn(current_context: Option<&Value>) -> Value),
+    Lambda(fn(current_context: &Value) -> Value),
     None,
 }
 
 impl Value {
-    fn to_string(&self, context: Option<&Value>) -> String {
+    fn to_string(&self, context: &Value) -> String {
         return match self {
             Value::Bool(bool) => bool.to_string(),
             Value::Lambda(lambda) => lambda(context).to_string(context),
@@ -23,7 +23,7 @@ impl Value {
         };
     }
 
-    fn to_bool(&self, context: Option<&Value>) -> bool {
+    fn to_bool(&self, context: &Value) -> bool {
         return match self {
             Value::Bool(bool) => *bool,
             Value::Lambda(lambda) => return lambda(context).to_bool(context),
@@ -76,7 +76,7 @@ pub trait Renderable {
     fn render(
         self,
         writable: &mut impl std::io::Write,
-        context: Option<&Value>,
+        context: &Value,
         partials: Option<&HashMap<String, Vec<Node>>>,
     ) -> Option<RenderError>;
 }
@@ -85,7 +85,7 @@ impl Renderable for &Vec<Node> {
     fn render(
         self,
         writable: &mut impl std::io::Write,
-        context: Option<&Value>,
+        context: &Value,
         partials: Option<&HashMap<String, Vec<Node>>>,
     ) -> Option<RenderError> {
         for node in self {
@@ -101,7 +101,7 @@ impl Renderable for &Node {
     fn render(
         self,
         writable: &mut impl std::io::Write,
-        context: Option<&Value>,
+        context: &Value,
         partials: Option<&HashMap<String, Vec<Node>>>,
     ) -> Option<RenderError> {
         match self {
@@ -133,14 +133,12 @@ impl Renderable for &Node {
                         match value {
                             Value::Vec(vec) => {
                                 for value in vec {
-                                    children.render(writable, Some(value), partials);
+                                    children.render(writable, value, partials);
                                 }
                             }
                             _ => {
                                 for child in children {
-                                    if let Some(error) =
-                                        child.render(writable, Some(value), partials)
-                                    {
+                                    if let Some(error) = child.render(writable, value, partials) {
                                         return Some(error);
                                     }
                                 }
@@ -151,11 +149,9 @@ impl Renderable for &Node {
                 None => return Some(RenderError::IdentifierDoesNotExist(identifier.into())),
             },
             Node::Implicit => {
-                if let Some(context) = context {
-                    writable
-                        .write(context.to_string(Some(context)).as_bytes())
-                        .unwrap();
-                }
+                writable
+                    .write(context.to_string(context).as_bytes())
+                    .unwrap();
             }
             Node::Partial {
                 identifier,
@@ -217,36 +213,33 @@ impl Renderable for &Node {
     }
 }
 
-fn lookup(identifier: String, context: Option<&Value>) -> Option<&Value> {
+fn lookup(identifier: String, context: &Value) -> Option<&Value> {
     return match context {
-        Some(context) => match context {
-            Value::Object(context) => {
-                let parts = identifier.split(".").collect::<Vec<&str>>();
-                let mut current_context = context;
-                let mut value = None;
+        Value::Object(context) => {
+            let parts = identifier.split(".").collect::<Vec<&str>>();
+            let mut current_context = context;
+            let mut value = None;
 
-                for i in 0..parts.len() {
-                    let part = parts[i];
+            for i in 0..parts.len() {
+                let part = parts[i];
 
-                    match current_context.get(part) {
-                        Some(new_context) => match new_context {
-                            Value::Object(new_context) => {
-                                current_context = new_context;
-                            }
-                            new_value => {
-                                value = Some(new_value);
-                            }
-                        },
-                        None => {
-                            return None;
+                match current_context.get(part) {
+                    Some(new_context) => match new_context {
+                        Value::Object(new_context) => {
+                            current_context = new_context;
                         }
+                        new_value => {
+                            value = Some(new_value);
+                        }
+                    },
+                    None => {
+                        return None;
                     }
                 }
-
-                return value;
             }
-            _ => Some(context),
-        },
-        None => None,
+
+            return value;
+        }
+        _ => Some(context),
     };
 }

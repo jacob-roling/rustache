@@ -93,7 +93,7 @@ impl Rustache {
         }
         let partial = self.partials.get(name).unwrap();
         let value = to_value(context).unwrap();
-        partial.render(writable, Some(&value), Some(&self.partials));
+        partial.render(writable, &value, Some(&self.partials));
         return None;
     }
 }
