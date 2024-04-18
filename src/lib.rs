@@ -94,7 +94,7 @@ impl Rustache {
         let partial = self.partials.get(name).unwrap();
         let value = to_value(context).unwrap();
         partial.render(writable, Some(&value), Some(&self.partials));
-        return std::option::Option::<RenderError>::None;
+        return None;
     }
 }
 
@@ -106,4 +106,4 @@ where
 }
 
 #[derive(Serialize)]
-pub struct None;
+pub struct EmptyContext;

@@ -1,6 +1,6 @@
-use rustache::{node::Value, to_value, None, Rustache};
+use rustache::{EmptyContext, Rustache};
 use serde::Serialize;
-use std::{collections::HashMap, io::Write};
+use std::io::Write;
 
 #[derive(Debug, Serialize)]
 struct Index {
@@ -13,7 +13,7 @@ fn main() {
 
     // println!("{:#?}", rustache);
 
-    if let Some(error) = rustache.render("index", &mut stdout, &None) {
+    if let Some(error) = rustache.render("index", &mut stdout, &EmptyContext) {
         println!("{}", error);
     }
 
