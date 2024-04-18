@@ -1,5 +1,5 @@
 use crossbeam_channel::Sender;
-use std::io::{self, BufRead, BufReader};
+use std::io::{BufRead, Read};
 use substring::Substring;
 use thiserror::Error;
 
@@ -45,8 +45,8 @@ pub enum LexerError {
     ExpectedCharacter(char, char),
 }
 
-pub struct Lexer<R> {
-    reader: BufReader<R>,
+pub struct Lexer<R: Read + BufRead> {
+    reader: R,
     buffer: String,
     tokens: Sender<Token>,
     start_position: usize,
@@ -59,13 +59,13 @@ pub struct Lexer<R> {
     raw_close_delimiter_chars: usize,
 }
 
-trait State<R> {
+trait State<R: Read + BufRead> {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R>;
 }
 
 type StateFunction<R> = Option<Box<dyn State<R>>>;
 
-pub fn lex<R: io::Read>(reader: BufReader<R>, sender: Sender<Token>) {
+pub fn lex<R: Read + BufRead>(reader: R, sender: Sender<Token>) {
     let mut lexer = Lexer::new(reader, sender);
     let mut state_function: StateFunction<R> = Some(Box::new(LexText));
     while let Some(mut state) = state_function {
@@ -75,7 +75,7 @@ pub fn lex<R: io::Read>(reader: BufReader<R>, sender: Sender<Token>) {
 
 struct LexText;
 
-impl<R: io::Read> State<R> for LexText {
+impl<R: Read + BufRead> State<R> for LexText {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
         loop {
             if lexer.peekn(lexer.open_delimiter_chars) == lexer.open_delimiter {
@@ -98,7 +98,7 @@ impl<R: io::Read> State<R> for LexText {
 
 struct LexOpenDelimiter;
 
-impl<R: io::Read> State<R> for LexOpenDelimiter {
+impl<R: Read + BufRead> State<R> for LexOpenDelimiter {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
         lexer.nextn(lexer.open_delimiter_chars);
         lexer.emit(Token::OpenDelimiter);
@@ -108,7 +108,7 @@ impl<R: io::Read> State<R> for LexOpenDelimiter {
 
 struct LexInsideDelimiter;
 
-impl<R: io::Read> State<R> for LexInsideDelimiter {
+impl<R: Read + BufRead> State<R> for LexInsideDelimiter {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
         return match lexer.next() {
             Some(next_character) => match next_character {
@@ -173,7 +173,7 @@ impl<R: io::Read> State<R> for LexInsideDelimiter {
 
 struct LexCloseDelimiter;
 
-impl<R: io::Read> State<R> for LexCloseDelimiter {
+impl<R: Read + BufRead> State<R> for LexCloseDelimiter {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
         // Ignore whitespace
         lexer.accept_run(" ");
@@ -197,7 +197,7 @@ impl<R: io::Read> State<R> for LexCloseDelimiter {
 
 struct LexIdentifier;
 
-impl<R: io::Read> State<R> for LexIdentifier {
+impl<R: Read + BufRead> State<R> for LexIdentifier {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
         // Ignore whitespace
         lexer.accept_run(" ");
@@ -218,7 +218,7 @@ impl<R: io::Read> State<R> for LexIdentifier {
 
 struct LexRawIdentifier;
 
-impl<R: io::Read> State<R> for LexRawIdentifier {
+impl<R: Read + BufRead> State<R> for LexRawIdentifier {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
         // Ignore whitespace
         lexer.accept_run(" ");
@@ -234,7 +234,7 @@ impl<R: io::Read> State<R> for LexRawIdentifier {
 
 struct LexComment;
 
-impl<R: io::Read> State<R> for LexComment {
+impl<R: Read + BufRead> State<R> for LexComment {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
         lexer.ignore();
         loop {
@@ -254,7 +254,7 @@ impl<R: io::Read> State<R> for LexComment {
 
 struct LexCloseRawDelimiter;
 
-impl<R: io::Read> State<R> for LexCloseRawDelimiter {
+impl<R: Read + BufRead> State<R> for LexCloseRawDelimiter {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
         // Ignore whitespace
         lexer.accept_run(" ");
@@ -277,7 +277,7 @@ impl<R: io::Read> State<R> for LexCloseRawDelimiter {
 
 struct LexNewDelimiter;
 
-impl<R: io::Read> State<R> for LexNewDelimiter {
+impl<R: Read + BufRead> State<R> for LexNewDelimiter {
     fn next(&mut self, lexer: &mut Lexer<R>) -> StateFunction<R> {
         // Ignore whitespace
         lexer.accept_run(" ");
@@ -321,8 +321,8 @@ impl<R: io::Read> State<R> for LexNewDelimiter {
     }
 }
 
-impl<R: io::Read> Lexer<R> {
-    fn new(reader: BufReader<R>, sender: Sender<Token>) -> Self {
+impl<R: Read + BufRead> Lexer<R> {
+    fn new(reader: R, sender: Sender<Token>) -> Self {
         let open_delimiter = String::from("{{");
         let close_delimiter = String::from("}}");
 

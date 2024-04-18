@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use rustache::Rustache;
 
 fn main() {
@@ -5,4 +7,5 @@ fn main() {
     let mut stdout = std::io::stdout().lock();
     println!("{:#?}", rustache);
     rustache.render("test", &mut stdout, None);
+    stdout.flush().unwrap();
 }
