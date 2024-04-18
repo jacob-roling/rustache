@@ -3,7 +3,6 @@ use std::{
     io::{BufWriter, Write},
 };
 
-use anyhow::Error;
 use thiserror::Error;
 
 #[derive(Debug, Clone)]
@@ -17,22 +16,22 @@ pub enum Value {
 }
 
 impl Value {
-    fn to_string(&self, context: &Value) -> String {
+    fn to_string(&self, context: Option<&Value>) -> String {
         return match self {
             Value::Number(number) => number.to_string(),
             Value::Bool(bool) => bool.to_string(),
-            Value::Lambda(lambda) => lambda(Some(context)).to_string(context),
+            Value::Lambda(lambda) => lambda(context).to_string(context),
             Value::String(string) => string.to_string(),
             Value::Array(array) => array.iter().map(|v| v.to_string(context)).collect(),
             Value::Object(_) => "".into(),
         };
     }
 
-    fn to_bool(&self, context: &Value) -> bool {
+    fn to_bool(&self, context: Option<&Value>) -> bool {
         return match self {
             Value::Number(number) => number > &0.,
             Value::Bool(bool) => *bool,
-            Value::Lambda(lambda) => lambda(Some(context)).to_bool(context),
+            Value::Lambda(lambda) => return lambda(context).to_bool(context),
             Value::String(string) => string.len() > 0,
             Value::Array(array) => array.len() > 0,
             Value::Object(_) => true,
@@ -42,8 +41,8 @@ impl Value {
 
 #[derive(Error, Debug)]
 pub enum RenderError {
-    #[error("identifier does not exist in context")]
-    IdentifierDoesNotExist,
+    #[error("identifier: {0} does not exist")]
+    IdentifierDoesNotExist(String),
 }
 
 #[derive(Debug)]
@@ -80,7 +79,7 @@ impl Node {
     pub fn render(
         &self,
         writer: &mut BufWriter<impl std::io::Write>,
-        context: &Value,
+        context: Option<&Value>,
     ) -> Option<RenderError> {
         match self {
             Node::Root(children) => {
@@ -103,7 +102,7 @@ impl Node {
                     };
                     writer.write(escaped_value.as_bytes()).unwrap();
                 }
-                None => return Some(RenderError::IdentifierDoesNotExist),
+                None => return Some(RenderError::IdentifierDoesNotExist(identifier.to_string())),
             },
             Node::Comment(_comment) => {}
             Node::Section {
@@ -114,14 +113,18 @@ impl Node {
                 Some(value) => {
                     if value.to_bool(context) || *inverted {
                         for i in 0..children.len() {
-                            children[i].render(writer, value);
+                            children[i].render(writer, Some(value));
                         }
                     }
                 }
-                None => return Some(RenderError::IdentifierDoesNotExist),
+                None => return Some(RenderError::IdentifierDoesNotExist(identifier.to_string())),
             },
             Node::Implicit => {
-                writer.write(context.to_string(context).as_bytes()).unwrap();
+                if let Some(context) = context {
+                    writer
+                        .write(context.to_string(Some(context)).as_bytes())
+                        .unwrap();
+                }
             }
             _ => {}
         }
@@ -129,33 +132,36 @@ impl Node {
     }
 }
 
-fn lookup(identifier: String, context: &Value) -> Option<&Value> {
+fn lookup(identifier: String, context: Option<&Value>) -> Option<&Value> {
     return match context {
-        Value::Object(context) => {
-            let parts = identifier.split(".").collect::<Vec<&str>>();
-            let mut current_context = context;
-            let mut value = None;
+        Some(context) => match context {
+            Value::Object(context) => {
+                let parts = identifier.split(".").collect::<Vec<&str>>();
+                let mut current_context = context;
+                let mut value = None;
 
-            for i in 0..parts.len() {
-                let part = parts[i];
+                for i in 0..parts.len() {
+                    let part = parts[i];
 
-                match current_context.get(part) {
-                    Some(new_context) => match new_context {
-                        Value::Object(new_context) => {
-                            current_context = new_context;
+                    match current_context.get(part) {
+                        Some(new_context) => match new_context {
+                            Value::Object(new_context) => {
+                                current_context = new_context;
+                            }
+                            new_value => {
+                                value = Some(new_value);
+                            }
+                        },
+                        None => {
+                            return None;
                         }
-                        new_value => {
-                            value = Some(new_value);
-                        }
-                    },
-                    None => {
-                        return None;
                     }
                 }
-            }
 
-            return value;
-        }
-        _ => Some(context),
+                return value;
+            }
+            _ => Some(context),
+        },
+        None => None,
     };
 }

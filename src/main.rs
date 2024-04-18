@@ -4,7 +4,7 @@ use std::{
     thread,
 };
 
-use rustache::{lexer::lex, node::Value, _old_parser::parse};
+use rustache::{lexer::lex, node::Value, parser::parse};
 
 fn main() {
     // println!("{:#?}", templates("views", "**/*.mustache"));
@@ -15,7 +15,8 @@ fn main() {
 
     thread::spawn(move || {
         // let input = String::from("{{default_tags}}{{=<% %>=}}<%new_tags%>");
-        let input = String::from("{{#section}}{{.}}{{/section}}");
+        // let input = String::from("{{#section}}{{.}}{{/section}}");
+        let input = String::from("Hello {{.}}");
         let reader = BufReader::with_capacity(128, Cursor::new(input));
         lex(reader, token_sender);
     });
@@ -47,6 +48,6 @@ fn main() {
 
             // println!("{:#?}", String::from_utf8(result).unwrap());
         }
-        Err(e) => println!("{:#?}", e),
+        Err(e) => println!("{}", e),
     };
 }

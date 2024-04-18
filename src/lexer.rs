@@ -10,7 +10,11 @@ const VALID_DELIMITER_CHARACTER_SET: &str = "<>%()@";
 
 #[derive(Debug, Clone)]
 pub enum Token {
-    Error(LexerError),
+    Error {
+        line: usize,
+        column: usize,
+        message: String,
+    },
     EOF,
     Text(String),
     OpenDelimiter,
@@ -37,8 +41,8 @@ pub enum LexerError {
     UnexpectedEOF,
     #[error("unexpected character: {0}")]
     UnexpectedCharacter(char),
-    #[error("TODO")]
-    TODO,
+    #[error("expected character: {0} got: {1}")]
+    ExpectedCharacter(char, char),
 }
 
 pub struct Lexer<R> {
@@ -196,7 +200,7 @@ impl<R: io::Read> State<R> for LexIdentifier {
         lexer.ignore();
 
         // Check if identifier is dynamic
-        if lexer.accept("*") {
+        if let (true, _) = lexer.accept("*") {
             lexer.emit(Token::Dynamic);
         }
 
@@ -280,9 +284,10 @@ impl<R: io::Read> State<R> for LexNewDelimiter {
         let new_open_delimiter = lexer.current();
         lexer.ignore();
 
-        if !lexer.accept(" ") {
-            return lexer.emit_error(LexerError::TODO);
+        if let (false, Some(got)) = lexer.accept(" ") {
+            return lexer.emit_error(LexerError::ExpectedCharacter(' ', got));
         }
+
         lexer.ignore();
 
         // Consume valid characters and set new close delimiter
@@ -290,8 +295,8 @@ impl<R: io::Read> State<R> for LexNewDelimiter {
         let new_close_delimiter = lexer.current();
         lexer.ignore();
 
-        if !lexer.accept("=") {
-            return lexer.emit_error(LexerError::TODO);
+        if let (false, Some(got)) = lexer.accept("=") {
+            return lexer.emit_error(LexerError::ExpectedCharacter('=', got));
         }
 
         // Peek to see if we have reached the old closing delimiter
@@ -395,9 +400,8 @@ impl<R: io::Read> Lexer<R> {
     fn emit(&mut self, token: Token) {
         self.start_position = self.position;
 
-        if let Err(error) = self.tokens.send(token) {
-            panic!("{}", error);
-        }
+        // Silently ignore send on a closed channel
+        if let Err(_) = self.tokens.send(token) {}
     }
 
     fn current(&self) -> String {
@@ -408,18 +412,25 @@ impl<R: io::Read> Lexer<R> {
     }
 
     fn emit_error(&mut self, error: LexerError) -> StateFunction<R> {
-        self.tokens.send(Token::Error(error.into())).unwrap();
+        self.tokens
+            .send(Token::Error {
+                line: 0,
+                column: 0,
+                message: error.to_string(),
+            })
+            .unwrap();
         return None;
     }
 
-    fn accept(&mut self, character_set: &str) -> bool {
-        if let Some(next_characteracter) = self.next() {
-            if character_set.contains(next_characteracter) {
-                return true;
+    fn accept(&mut self, character_set: &str) -> (bool, Option<char>) {
+        if let Some(next_character) = self.next() {
+            if character_set.contains(next_character) {
+                return (true, Some(next_character));
             }
+            return (false, Some(next_character));
         }
         self.backup(1);
-        return false;
+        return (false, None);
     }
 
     fn accept_run(&mut self, character_set: &str) {
