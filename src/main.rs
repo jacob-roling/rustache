@@ -13,7 +13,13 @@ fn main() {
 
     // println!("{:#?}", rustache);
 
-    if let Some(error) = rustache.render("index", &mut stdout, &EmptyContext) {
+    if let Some(error) = rustache.render(
+        "index",
+        &mut stdout,
+        &Index {
+            greeting: "Test".into(),
+        },
+    ) {
         println!("{}", error);
     }
 
