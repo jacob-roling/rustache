@@ -2,7 +2,6 @@ use std::{
     collections::HashMap,
     io::{BufWriter, Write},
 };
-
 use thiserror::Error;
 
 #[derive(Debug, Clone)]

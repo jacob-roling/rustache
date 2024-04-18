@@ -15,20 +15,7 @@ fn main() {
 
     thread::spawn(move || {
         // let input = String::from("{{default_tags}}{{=<% %>=}}<%new_tags%>");
-        let input = String::from(
-            "{{<article}}
-    Never shown
-  {{$body}}
-    {{#headlines}}
-        <p>{{.}}</p>
-    {{/headlines}}
-  {{/body}}
-{{/article}}
-
-{{<article}}
-  {{$title}}Yesterday{{/title}}
-{{/article}}",
-        );
+        let input = String::from("{{<1}}{{<*2}}{{<3}}{{/3}}{{/*2}}{{/1}}");
         // let input = String::from("Hello {{placeholder}} asdjksand");
 
         let reader = BufReader::with_capacity(128, Cursor::new(input));

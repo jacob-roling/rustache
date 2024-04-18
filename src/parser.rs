@@ -80,6 +80,7 @@ impl Parser {
                                     message,
                                 })
                             }
+                            Token::Comment(comment) => nodes.push(Node::Comment(comment)),
                             Token::SetDelimiter => {}
                             Token::Partial => {
                                 if let Some(token) = self.next() {
@@ -254,6 +255,7 @@ impl Parser {
         }
 
         let mut next_token = None;
+        let mut next_next_token = None;
 
         while let Some(token) = self.next() {
             if let Token::SectionEnd = token {
@@ -265,12 +267,27 @@ impl Parser {
                             return Some(tokens);
                         }
                     }
+                    if let Token::Dynamic = token {
+                        if let Some(token) = self.next() {
+                            if let Token::Identifier(ref other_identifier) = token {
+                                if identifier == other_identifier {
+                                    // Pop off the last open delimiter
+                                    tokens.pop();
+                                    return Some(tokens);
+                                }
+                            }
+                            next_next_token = Some(token);
+                        }
+                    }
                     next_token = Some(token);
                 }
             }
             tokens.push(token);
             if next_token.is_some() {
                 tokens.push(next_token.take().unwrap());
+            }
+            if next_next_token.is_some() {
+                tokens.push(next_next_token.take().unwrap());
             }
         }
 

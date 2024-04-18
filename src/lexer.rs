@@ -6,7 +6,7 @@ use thiserror::Error;
 const VALID_IDENTIFIER_CHARACTER_SET: &str =
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.?_";
 
-const VALID_DELIMITER_CHARACTER_SET: &str = "<>%()@";
+const VALID_DELIMITER_CHARACTER_SET: &str = "<>%()@{}";
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
@@ -154,6 +154,10 @@ impl<R: io::Read> State<R> for LexInsideDelimiter {
                 '=' => {
                     lexer.emit(Token::SetDelimiter);
                     return Some(Box::new(LexNewDelimiter));
+                }
+                ' ' => {
+                    lexer.ignore();
+                    return Some(Box::new(LexIdentifier));
                 }
                 '\n' => return lexer.emit_error(LexerError::UnclosedDelimiter),
                 next_character if next_character.is_alphanumeric() => {
