@@ -4,33 +4,33 @@ use thiserror::Error;
 #[derive(Debug, Clone)]
 pub enum Value {
     String(String),
-    Number(f32),
-    Array(Vec<Value>),
+    Vec(Vec<Value>),
     Bool(bool),
     Object(HashMap<String, Value>),
     Lambda(fn(current_context: Option<&Value>) -> Value),
+    None,
 }
 
 impl Value {
     fn to_string(&self, context: Option<&Value>) -> String {
         return match self {
-            Value::Number(number) => number.to_string(),
             Value::Bool(bool) => bool.to_string(),
             Value::Lambda(lambda) => lambda(context).to_string(context),
             Value::String(string) => string.to_string(),
-            Value::Array(array) => array.iter().map(|v| v.to_string(context)).collect(),
+            Value::Vec(array) => array.iter().map(|v| v.to_string(context)).collect(),
+            Value::None => "".into(),
             Value::Object(_) => "".into(),
         };
     }
 
     fn to_bool(&self, context: Option<&Value>) -> bool {
         return match self {
-            Value::Number(number) => number > &0.,
             Value::Bool(bool) => *bool,
             Value::Lambda(lambda) => return lambda(context).to_bool(context),
             Value::String(string) => string.len() > 0,
-            Value::Array(array) => array.len() > 0,
+            Value::Vec(array) => array.len() > 0,
             Value::Object(_) => true,
+            Value::None => false,
         };
     }
 }
@@ -131,8 +131,8 @@ impl Renderable for &Node {
                 Some(value) => {
                     if value.to_bool(context) || *inverted {
                         match value {
-                            Value::Array(array) => {
-                                for value in array {
+                            Value::Vec(vec) => {
+                                for value in vec {
                                     children.render(writable, Some(value), partials);
                                 }
                             }

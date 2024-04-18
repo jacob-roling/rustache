@@ -6,10 +6,12 @@ pub mod parser;
 use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf};
 
 use anyhow::{Error, Result};
+pub use encoder::Encoder;
 use glob::glob;
 use lexer::lex;
 use node::{Node, RenderError, Renderable, Value};
 use parser::{parse, ParserError};
+use serde::Serialize;
 
 #[derive(Debug)]
 pub struct Rustache {
@@ -77,17 +79,31 @@ impl Rustache {
         });
     }
 
-    pub fn render(
+    pub fn render<T>(
         &self,
         name: &str,
         writable: &mut impl std::io::Write,
-        context: Option<&Value>,
-    ) -> Option<node::RenderError> {
+        context: &T,
+    ) -> Option<node::RenderError>
+    where
+        T: Serialize,
+    {
         if !self.partials.contains_key(name) {
             return Some(RenderError::PartialDoesNotExist(name.into()));
         }
         let partial = self.partials.get(name).unwrap();
-        partial.render(writable, context, Some(&self.partials));
-        return None;
+        let value = to_value(context).unwrap();
+        partial.render(writable, Some(&value), Some(&self.partials));
+        return std::option::Option::<RenderError>::None;
     }
 }
+
+pub fn to_value<T>(value: T) -> std::result::Result<Value, encoder::Error>
+where
+    T: serde::Serialize,
+{
+    value.serialize(Encoder)
+}
+
+#[derive(Serialize)]
+pub struct None;

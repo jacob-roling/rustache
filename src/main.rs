@@ -1,46 +1,19 @@
-use rustache::{node::Value, Context, Rustache};
+use rustache::{node::Value, to_value, None, Rustache};
+use serde::Serialize;
 use std::{collections::HashMap, io::Write};
 
-#[derive(Debug, Context)]
-pub struct Test {
-    list: Vec<usize>,
-    text: String,
-    num: f32,
-    map: Fruit,
-}
-
-#[derive(Debug, Context)]
-struct Fruit {
-    name: String,
-}
+#[derive(Debug, Serialize)]
+struct Index {}
 
 fn main() {
-    let test = Test {
-        list: Vec::from([1, 2, 3]),
-        text: "hi".into(),
-        num: 16.,
-        map: Fruit {
-            name: "banana".into(),
-        },
-    };
+    let rustache = Rustache::new("views", "**/*.mustache").unwrap();
+    let mut stdout = std::io::stdout();
 
-    println!("{:#?}", test.to_context());
+    // println!("{:#?}", rustache);
 
-    // let rustache = Rustache::new("views", "**/*.mustache").unwrap();
-    // let mut stdout = std::io::stdout().lock();
-
-    // // println!("{:#?}", rustache);
-
-    // if let Some(error) = rustache.render(
-    //     "index",
-    //     &mut stdout,
-    //     Some(&Value::Object(HashMap::from([(
-    //         "greeting".into(),
-    //         Value::String("world".into()),
-    //     )]))),
-    // ) {
-    //     println!("{}", error);
-    // }
+    if let Some(error) = rustache.render("index", &mut stdout, &None) {
+        println!("{}", error);
+    }
 
     // if let Some(error) = rustache.render(
     //     "fruit",
@@ -57,5 +30,5 @@ fn main() {
     //     println!("{}", error);
     // }
 
-    // stdout.flush().unwrap();
+    stdout.flush().unwrap();
 }

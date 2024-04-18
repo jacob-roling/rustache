@@ -122,15 +122,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rustache_derive"
-version = "0.1.0"
-dependencies = [
- "quote",
- "rustache",
- "syn",
-]
-
-[[package]]
 name = "serde"
 version = "1.0.198"
 source = "registry+https://github.com/rust-lang/crates.io-index"
