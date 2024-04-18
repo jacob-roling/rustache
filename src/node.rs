@@ -48,7 +48,6 @@ pub enum RenderError {
 
 #[derive(Debug)]
 pub enum Node {
-    Root(Vec<Node>),
     Section {
         identifier: String,
         inverted: bool,
@@ -76,19 +75,39 @@ pub enum Node {
     },
 }
 
-impl Node {
-    pub fn render(
-        &self,
-        writer: &mut BufWriter<impl std::io::Write>,
+pub trait Renderable {
+    fn render(
+        self,
+        writer: &mut impl std::io::Write,
         context: Option<&Value>,
-        partials: Option<&HashMap<String, Node>>,
+        partials: Option<&HashMap<String, Vec<Node>>>,
+    ) -> Option<RenderError>;
+}
+
+impl Renderable for &Vec<Node> {
+    fn render(
+        self,
+        writer: &mut impl std::io::Write,
+        context: Option<&Value>,
+        partials: Option<&HashMap<String, Vec<Node>>>,
+    ) -> Option<RenderError> {
+        for node in self {
+            if let Some(error) = node.render(writer, context, partials) {
+                return Some(error);
+            }
+        }
+        return None;
+    }
+}
+
+impl Renderable for &Node {
+    fn render(
+        self,
+        writer: &mut impl std::io::Write,
+        context: Option<&Value>,
+        partials: Option<&HashMap<String, Vec<Node>>>,
     ) -> Option<RenderError> {
         match self {
-            Node::Root(children) => {
-                for i in 0..children.len() {
-                    children[i].render(writer, context, partials);
-                }
-            }
             Node::Text(text) => {
                 writer.write(text.as_bytes()).unwrap();
             }
@@ -115,7 +134,9 @@ impl Node {
                 Some(value) => {
                     if value.to_bool(context) || *inverted {
                         for i in 0..children.len() {
-                            children[i].render(writer, Some(value), partials);
+                            if let Some(error) = children[i].render(writer, Some(value), partials) {
+                                return Some(error);
+                            }
                         }
                     }
                 }
@@ -134,7 +155,9 @@ impl Node {
             } => {
                 if let Some(partials) = partials {
                     if let Some(partial) = partials.get(identifier) {
-                        partial.render(writer, context, Some(partials));
+                        if let Some(error) = partial.render(writer, context, Some(partials)) {
+                            return Some(error);
+                        }
                     } else {
                         return Some(RenderError::PartialDoesNotExist(identifier.into()));
                     }
@@ -142,7 +165,18 @@ impl Node {
                     return Some(RenderError::PartialDoesNotExist(identifier.into()));
                 }
             }
-            _ => {}
+            Node::Parent {
+                identifier,
+                dynamic,
+                children,
+            } => {}
+            Node::Block {
+                identifier,
+                children,
+            } => match lookup(identifier.into(), context) {
+                Some(value) => if value.to_bool(context) {},
+                None => return Some(RenderError::IdentifierDoesNotExist(identifier.into())),
+            },
         }
         return None;
     }

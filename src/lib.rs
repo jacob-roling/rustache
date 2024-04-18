@@ -2,53 +2,93 @@ pub mod lexer;
 pub mod node;
 pub mod parser;
 
-use std::{fs::File, io::BufReader, sync::mpsc};
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{BufReader, BufWriter},
+    path::PathBuf,
+};
 
+use anyhow::{Error, Result};
 use glob::glob;
+use lexer::lex;
+use node::{Node, RenderError, Renderable, Value};
+use parser::{parse, ParserError};
 
-// pub fn templates(base_directory: &str, glob_pattern: &str) -> Vec<Vec<lexer::Token>> {
-//     let num_threads = std::thread::available_parallelism().unwrap();
+#[derive(Debug)]
+pub struct Rustache {
+    pub directory: String,
+    pub partials: HashMap<String, Vec<Node>>,
+}
 
-//     let thread_pool = rayon::ThreadPoolBuilder::new()
-//         .num_threads(num_threads.into())
-//         .build()
-//         .unwrap();
+impl Rustache {
+    pub fn new(directory: &str, glob_pattern: &str) -> Result<Self, Error> {
+        let num_threads = std::thread::available_parallelism().unwrap();
 
-//     let (list_sender, list_reciever) = mpsc::channel::<Vec<lexer::Token>>();
+        println!("num threads: {:#?}", num_threads);
 
-//     for entry in
-//         glob(&[base_directory, "/", glob_pattern].concat()).expect("failed to read glob pattern")
-//     {
-//         match entry {
-//             Ok(path) => {
-//                 let (token_sender, token_reciever) = mpsc::sync_channel::<lexer::Token>(2);
+        let mut partials = HashMap::new();
 
-//                 thread_pool.spawn(move || {
-//                     let file = File::open(path).expect("Failed to open file");
-//                     let reader = BufReader::with_capacity(64, file);
-//                     lexer::lex(reader, token_sender);
-//                 });
+        let thread_pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(num_threads.into())
+            .build()
+            .unwrap();
 
-//                 let list_sender_clone = list_sender.clone();
-//                 thread_pool.spawn(move || {
-//                     let mut tokens = Vec::new();
-//                     while let Ok(token) = token_reciever.recv() {
-//                         tokens.push(token);
-//                     }
-//                     list_sender_clone
-//                         .send(tokens)
-//                         .expect("Failed to send result");
-//                 })
-//             }
-//             Err(e) => panic!("{}", e),
-//         }
-//     }
+        let (result_sender, result_reciever) =
+            crossbeam_channel::unbounded::<(String, Result<Vec<Node>, ParserError>)>();
 
-//     let mut results = Vec::new();
+        for entry in
+            glob(&[directory, "/", glob_pattern].concat()).expect("failed to read glob pattern")
+        {
+            if let Ok(path) = entry {
+                let name = path
+                    .with_extension("")
+                    .iter()
+                    .skip(1)
+                    .collect::<PathBuf>()
+                    .to_str()
+                    .map(|s| s.to_string());
 
-//     for result in list_reciever {
-//         results.push(result);
-//     }
+                if name.is_none() {}
 
-//     return results;
-// }
+                let (token_sender, token_reciever) = crossbeam_channel::bounded::<lexer::Token>(4);
+
+                let file = File::open(path).expect("failed to open file");
+
+                thread_pool.spawn(move || {
+                    let reader = BufReader::with_capacity(128, file);
+                    lex(reader, token_sender);
+                });
+
+                let result_producer = result_sender.clone();
+
+                thread_pool.spawn(move || {
+                    if let Err(_) = result_producer.send((name.unwrap(), parse(token_reciever))) {}
+                    drop(result_producer);
+                });
+            }
+        }
+
+        while let Ok((name, Ok(partial))) = result_reciever.recv() {
+            partials.insert(name, partial);
+            println!("partials: {:#?}", partials);
+        }
+
+        return Ok(Self {
+            directory: directory.into(),
+            partials,
+        });
+    }
+
+    pub fn render(
+        &self,
+        name: &str,
+        writer: &mut impl std::io::Write,
+        context: Option<&Value>,
+    ) -> Option<node::RenderError> {
+        return match self.partials.get(name) {
+            Some(partial) => partial.render(writer, context, Some(&self.partials)),
+            None => Some(RenderError::PartialDoesNotExist(name.into())),
+        };
+    }
+}
