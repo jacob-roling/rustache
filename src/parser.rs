@@ -166,24 +166,57 @@ impl Parser {
                                 }
                             }
                             Token::Parent => {
-                                if let Some(token) = self.next {
+                                if let Some(token) = self.next() {
                                     match token {
                                         Token::Identifier(identifier) => {
-                                            let mut sub_parser = Parser::new(None);
-                                            sub_parser.buffer = tokens.into();
+                                            // println!("PARENT {}", identifier);
+                                            if let Some(tokens) = self.section_tokens(&identifier) {
+                                                let mut sub_parser = Parser::new(None);
+                                                sub_parser.buffer = tokens.into();
 
-                                            match sub_parser.parse() {
-                                                Ok(children) => {
-                                                    nodes.push(Node::Parent {
-                                                        identifier,
-                                                        dynamic,
-                                                        children,
-                                                    });
+                                                match sub_parser.parse() {
+                                                    Ok(children) => {
+                                                        nodes.push(Node::Parent {
+                                                            identifier,
+                                                            dynamic: false,
+                                                            children,
+                                                        });
+                                                    }
+                                                    Err(error) => return Err(error),
                                                 }
-                                                Err(error) => return Err(error),
+                                            } else {
+                                                return Err(ParserError::UnclosedSection(
+                                                    identifier,
+                                                ));
                                             }
                                         }
-                                        _ => {}
+                                        Token::Dynamic => {
+                                            if let Some(Token::Identifier(identifier)) = self.next()
+                                            {
+                                                if let Some(tokens) =
+                                                    self.section_tokens(&identifier)
+                                                {
+                                                    let mut sub_parser = Parser::new(None);
+                                                    sub_parser.buffer = tokens.into();
+
+                                                    match sub_parser.parse() {
+                                                        Ok(children) => {
+                                                            nodes.push(Node::Parent {
+                                                                identifier,
+                                                                dynamic: true,
+                                                                children,
+                                                            });
+                                                        }
+                                                        Err(error) => return Err(error),
+                                                    }
+                                                } else {
+                                                    return Err(ParserError::UnclosedSection(
+                                                        identifier,
+                                                    ));
+                                                }
+                                            }
+                                        }
+                                        _ => return Err(ParserError::UnexpectedToken(token)),
                                     }
                                 }
                             }
@@ -222,18 +255,20 @@ impl Parser {
         }
 
         while let Some(token) = self.next() {
-            match token {
-                Token::SectionEnd => {
-                    if let Some(Token::Identifier(other_identifier)) = self.next() {
-                        if identifier == &other_identifier {
-                            // Pop off the last open delimiter
-                            tokens.pop();
-                            return Some(tokens);
-                        }
+            if identifier == "body" {
+                println!("{:#?}", token);
+            }
+            if let Token::SectionEnd = token {
+                if let Some(Token::Identifier(other_identifier)) = self.next() {
+                    if identifier == &other_identifier {
+                        // Pop off the last open delimiter
+                        tokens.pop();
+                        // println!("{:#?}", tokens);
+                        return Some(tokens);
                     }
                 }
-                _ => tokens.push(token),
             }
+            tokens.push(token);
         }
 
         return None;

@@ -17,10 +17,10 @@ fn main() {
         // let input = String::from("{{default_tags}}{{=<% %>=}}<%new_tags%>");
         let input = String::from(
             "{{<article}}
-  Never shown
+    Never shown
   {{$body}}
     {{#headlines}}
-    <p>{{.}}</p>
+        <p>{{.}}</p>
     {{/headlines}}
   {{/body}}
 {{/article}}
