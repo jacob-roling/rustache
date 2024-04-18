@@ -15,8 +15,22 @@ fn main() {
 
     thread::spawn(move || {
         // let input = String::from("{{default_tags}}{{=<% %>=}}<%new_tags%>");
-        // let input = String::from("{{#section}}{{.}}{{/section}}");
-        let input = String::from("Hello {{.}}");
+        let input = String::from(
+            "{{<article}}
+  Never shown
+  {{$body}}
+    {{#headlines}}
+    <p>{{.}}</p>
+    {{/headlines}}
+  {{/body}}
+{{/article}}
+
+{{<article}}
+  {{$title}}Yesterday{{/title}}
+{{/article}}",
+        );
+        // let input = String::from("Hello {{placeholder}} asdjksand");
+
         let reader = BufReader::with_capacity(128, Cursor::new(input));
         lex(reader, token_sender);
     });
@@ -27,20 +41,24 @@ fn main() {
 
     match template_handle
         .join()
-        .expect("Couldn't join on the associated thread")
+        .expect("couldn't join on the associated thread")
     {
-        Ok(node) => {
-            println!("{:#?}", node);
+        Ok(nodes) => {
+            println!("{:#?}", nodes);
+
             // let mut result = Vec::new();
             // let mut writer = BufWriter::new(&mut result);
 
-            // node.render(
-            //     &mut writer,
-            //     &Value::Object(HashMap::<String, Value>::from([(
-            //         "greeting".into(),
-            //         Value::String("world".into()),
-            //     )])),
-            // );
+            // for node in nodes {
+            //     node.render(
+            //         &mut writer,
+            //         Some(&Value::Object(HashMap::<String, Value>::from([(
+            //             "placeholder".into(),
+            //             Value::String("christmas".into()),
+            //         )]))),
+            //         None,
+            //     );
+            // }
 
             // writer.flush().unwrap();
 

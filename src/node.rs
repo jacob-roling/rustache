@@ -41,8 +41,10 @@ impl Value {
 
 #[derive(Error, Debug)]
 pub enum RenderError {
-    #[error("identifier: {0} does not exist")]
+    #[error("identifier: '{0}' does not exist")]
     IdentifierDoesNotExist(String),
+    #[error("partial: '{0}' does not exist")]
+    PartialDoesNotExist(String),
 }
 
 #[derive(Debug)]
@@ -80,11 +82,12 @@ impl Node {
         &self,
         writer: &mut BufWriter<impl std::io::Write>,
         context: Option<&Value>,
+        partials: Option<&HashMap<String, Node>>,
     ) -> Option<RenderError> {
         match self {
             Node::Root(children) => {
                 for i in 0..children.len() {
-                    children[i].render(writer, context);
+                    children[i].render(writer, context, partials);
                 }
             }
             Node::Text(text) => {
@@ -102,7 +105,7 @@ impl Node {
                     };
                     writer.write(escaped_value.as_bytes()).unwrap();
                 }
-                None => return Some(RenderError::IdentifierDoesNotExist(identifier.to_string())),
+                None => return Some(RenderError::IdentifierDoesNotExist(identifier.into())),
             },
             Node::Comment(_comment) => {}
             Node::Section {
@@ -113,17 +116,31 @@ impl Node {
                 Some(value) => {
                     if value.to_bool(context) || *inverted {
                         for i in 0..children.len() {
-                            children[i].render(writer, Some(value));
+                            children[i].render(writer, Some(value), partials);
                         }
                     }
                 }
-                None => return Some(RenderError::IdentifierDoesNotExist(identifier.to_string())),
+                None => return Some(RenderError::IdentifierDoesNotExist(identifier.into())),
             },
             Node::Implicit => {
                 if let Some(context) = context {
                     writer
                         .write(context.to_string(Some(context)).as_bytes())
                         .unwrap();
+                }
+            }
+            Node::Partial {
+                identifier,
+                dynamic: _,
+            } => {
+                if let Some(partials) = partials {
+                    if let Some(partial) = partials.get(identifier) {
+                        partial.render(writer, context, Some(partials));
+                    } else {
+                        return Some(RenderError::PartialDoesNotExist(identifier.into()));
+                    }
+                } else {
+                    return Some(RenderError::PartialDoesNotExist(identifier.into()));
                 }
             }
             _ => {}

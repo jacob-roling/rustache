@@ -8,7 +8,7 @@ const VALID_IDENTIFIER_CHARACTER_SET: &str =
 
 const VALID_DELIMITER_CHARACTER_SET: &str = "<>%()@";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     Error {
         line: usize,
@@ -39,9 +39,9 @@ pub enum LexerError {
     UnclosedDelimiter,
     #[error("unexpected end of file")]
     UnexpectedEOF,
-    #[error("unexpected character: {0}")]
+    #[error("unexpected character: '{0}'")]
     UnexpectedCharacter(char),
-    #[error("expected character: {0} got: {1}")]
+    #[error("expected character: '{0}' got: '{1}'")]
     ExpectedCharacter(char, char),
 }
 
@@ -400,8 +400,9 @@ impl<R: io::Read> Lexer<R> {
     fn emit(&mut self, token: Token) {
         self.start_position = self.position;
 
-        // Silently ignore send on a closed channel
-        if let Err(_) = self.tokens.send(token) {}
+        if let Err(_) = self.tokens.send(token) {
+            // Silently ignore send on a closed channel
+        }
     }
 
     fn current(&self) -> String {
@@ -412,13 +413,11 @@ impl<R: io::Read> Lexer<R> {
     }
 
     fn emit_error(&mut self, error: LexerError) -> StateFunction<R> {
-        self.tokens
-            .send(Token::Error {
-                line: 0,
-                column: 0,
-                message: error.to_string(),
-            })
-            .unwrap();
+        self.emit(Token::Error {
+            line: self.line(),
+            column: self.column(),
+            message: error.to_string(),
+        });
         return None;
     }
 
@@ -451,5 +450,24 @@ impl<R: io::Read> Lexer<R> {
         raw_close_delimiter.insert(0, '}');
         self.raw_close_delimiter = raw_close_delimiter;
         self.raw_close_delimiter_chars = self.raw_close_delimiter.chars().count();
+    }
+
+    fn line(&self) -> usize {
+        return self.buffer[0..self.position]
+            .chars()
+            .filter(|character| character == &'\n')
+            .count()
+            + 1;
+    }
+
+    fn column(&self) -> usize {
+        let mut count = 0;
+        for character in self.buffer[0..self.position].chars().rev() {
+            if character == '\n' {
+                break;
+            }
+            count += 1;
+        }
+        return count;
     }
 }
