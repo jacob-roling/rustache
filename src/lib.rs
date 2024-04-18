@@ -23,14 +23,12 @@ pub struct Rustache {
 
 impl Rustache {
     pub fn new(directory: &str, glob_pattern: &str) -> Result<Self, Error> {
-        let num_threads = std::thread::available_parallelism().unwrap();
-
-        println!("num threads: {:#?}", num_threads);
+        let available_threads = std::thread::available_parallelism().unwrap();
 
         let mut partials = HashMap::new();
 
         let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(num_threads.into())
+            .num_threads(available_threads.into())
             .build()
             .unwrap();
 
@@ -63,15 +61,18 @@ impl Rustache {
                 let result_producer = result_sender.clone();
 
                 thread_pool.spawn(move || {
-                    if let Err(_) = result_producer.send((name.unwrap(), parse(token_reciever))) {}
-                    drop(result_producer);
+                    // if let Err(_) = result_producer.send((name.unwrap(), parse(token_reciever))) {}
+                    result_producer
+                        .send((name.unwrap(), parse(token_reciever)))
+                        .unwrap();
                 });
             }
         }
 
+        drop(result_sender);
+
         while let Ok((name, Ok(partial))) = result_reciever.recv() {
             partials.insert(name, partial);
-            println!("partials: {:#?}", partials);
         }
 
         return Ok(Self {
@@ -83,11 +84,11 @@ impl Rustache {
     pub fn render(
         &self,
         name: &str,
-        writer: &mut impl std::io::Write,
+        writable: &mut impl std::io::Write,
         context: Option<&Value>,
     ) -> Option<node::RenderError> {
         return match self.partials.get(name) {
-            Some(partial) => partial.render(writer, context, Some(&self.partials)),
+            Some(partial) => partial.render(writable, context, Some(&self.partials)),
             None => Some(RenderError::PartialDoesNotExist(name.into())),
         };
     }

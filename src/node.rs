@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    io::{BufWriter, Write},
-};
+use std::collections::HashMap;
 use thiserror::Error;
 
 #[derive(Debug, Clone)]
@@ -78,7 +75,7 @@ pub enum Node {
 pub trait Renderable {
     fn render(
         self,
-        writer: &mut impl std::io::Write,
+        writable: &mut impl std::io::Write,
         context: Option<&Value>,
         partials: Option<&HashMap<String, Vec<Node>>>,
     ) -> Option<RenderError>;
@@ -87,12 +84,12 @@ pub trait Renderable {
 impl Renderable for &Vec<Node> {
     fn render(
         self,
-        writer: &mut impl std::io::Write,
+        writable: &mut impl std::io::Write,
         context: Option<&Value>,
         partials: Option<&HashMap<String, Vec<Node>>>,
     ) -> Option<RenderError> {
         for node in self {
-            if let Some(error) = node.render(writer, context, partials) {
+            if let Some(error) = node.render(writable, context, partials) {
                 return Some(error);
             }
         }
@@ -103,13 +100,13 @@ impl Renderable for &Vec<Node> {
 impl Renderable for &Node {
     fn render(
         self,
-        writer: &mut impl std::io::Write,
+        writable: &mut impl std::io::Write,
         context: Option<&Value>,
         partials: Option<&HashMap<String, Vec<Node>>>,
     ) -> Option<RenderError> {
         match self {
             Node::Text(text) => {
-                writer.write(text.as_bytes()).unwrap();
+                writable.write(text.as_bytes()).unwrap();
             }
             Node::Variable {
                 identifier,
@@ -121,7 +118,7 @@ impl Renderable for &Node {
                         true => html_escape::encode_text(&string_value),
                         false => string_value.into(),
                     };
-                    writer.write(escaped_value.as_bytes()).unwrap();
+                    writable.write(escaped_value.as_bytes()).unwrap();
                 }
                 None => return Some(RenderError::IdentifierDoesNotExist(identifier.into())),
             },
@@ -134,7 +131,8 @@ impl Renderable for &Node {
                 Some(value) => {
                     if value.to_bool(context) || *inverted {
                         for i in 0..children.len() {
-                            if let Some(error) = children[i].render(writer, Some(value), partials) {
+                            if let Some(error) = children[i].render(writable, Some(value), partials)
+                            {
                                 return Some(error);
                             }
                         }
@@ -144,7 +142,7 @@ impl Renderable for &Node {
             },
             Node::Implicit => {
                 if let Some(context) = context {
-                    writer
+                    writable
                         .write(context.to_string(Some(context)).as_bytes())
                         .unwrap();
                 }
@@ -155,7 +153,7 @@ impl Renderable for &Node {
             } => {
                 if let Some(partials) = partials {
                     if let Some(partial) = partials.get(identifier) {
-                        if let Some(error) = partial.render(writer, context, Some(partials)) {
+                        if let Some(error) = partial.render(writable, context, Some(partials)) {
                             return Some(error);
                         }
                     } else {

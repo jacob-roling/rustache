@@ -4,7 +4,7 @@ use substring::Substring;
 use thiserror::Error;
 
 const VALID_IDENTIFIER_CHARACTER_SET: &str =
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.?_";
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.?_/";
 
 const VALID_DELIMITER_CHARACTER_SET: &str = "<>%()@{}";
 
