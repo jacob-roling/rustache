@@ -1,3 +1,4 @@
+workspace = { members = ["rustache_derive"] }
 [package]
 name = "rustache"
 version = "0.1.0"
@@ -13,3 +14,7 @@ html-escape = "0.2.13"
 rayon = "1.10.0"
 substring = "1.4.5"
 thiserror = "1.0.58"
+serde = "1.0.0"
+
+[dev-dependencies]
+serde_derive = "1.0.0"

@@ -130,10 +130,20 @@ impl Renderable for &Node {
             } => match lookup(identifier.to_string(), context) {
                 Some(value) => {
                     if value.to_bool(context) || *inverted {
-                        for i in 0..children.len() {
-                            if let Some(error) = children[i].render(writable, Some(value), partials)
-                            {
-                                return Some(error);
+                        match value {
+                            Value::Array(array) => {
+                                for value in array {
+                                    children.render(writable, Some(value), partials);
+                                }
+                            }
+                            _ => {
+                                for child in children {
+                                    if let Some(error) =
+                                        child.render(writable, Some(value), partials)
+                                    {
+                                        return Some(error);
+                                    }
+                                }
                             }
                         }
                     }

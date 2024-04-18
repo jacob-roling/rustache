@@ -1,13 +1,9 @@
+pub mod encoder;
 pub mod lexer;
 pub mod node;
 pub mod parser;
 
-use std::{
-    collections::HashMap,
-    fs::File,
-    io::{BufReader, BufWriter},
-    path::PathBuf,
-};
+use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf};
 
 use anyhow::{Error, Result};
 use glob::glob;
