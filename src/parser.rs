@@ -169,7 +169,6 @@ impl Parser {
                                 if let Some(token) = self.next() {
                                     match token {
                                         Token::Identifier(identifier) => {
-                                            // println!("PARENT {}", identifier);
                                             if let Some(tokens) = self.section_tokens(&identifier) {
                                                 let mut sub_parser = Parser::new(None);
                                                 sub_parser.buffer = tokens.into();
@@ -254,21 +253,25 @@ impl Parser {
             return None;
         }
 
+        let mut next_token = None;
+
         while let Some(token) = self.next() {
-            if identifier == "body" {
-                println!("{:#?}", token);
-            }
             if let Token::SectionEnd = token {
-                if let Some(Token::Identifier(other_identifier)) = self.next() {
-                    if identifier == &other_identifier {
-                        // Pop off the last open delimiter
-                        tokens.pop();
-                        // println!("{:#?}", tokens);
-                        return Some(tokens);
+                if let Some(token) = self.next() {
+                    if let Token::Identifier(ref other_identifier) = token {
+                        if identifier == other_identifier {
+                            // Pop off the last open delimiter
+                            tokens.pop();
+                            return Some(tokens);
+                        }
                     }
+                    next_token = Some(token);
                 }
             }
             tokens.push(token);
+            if next_token.is_some() {
+                tokens.push(next_token.take().unwrap());
+            }
         }
 
         return None;
