@@ -3,7 +3,9 @@ use serde::Serialize;
 use std::{collections::HashMap, io::Write};
 
 #[derive(Debug, Serialize)]
-struct Index {}
+struct Index {
+    greeting: String,
+}
 
 fn main() {
     let rustache = Rustache::new("views", "**/*.mustache").unwrap();

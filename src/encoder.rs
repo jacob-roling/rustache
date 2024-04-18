@@ -114,20 +114,20 @@ impl serde::Serializer for Encoder {
     }
 
     fn serialize_unit(self) -> Result<Value> {
-        todo!()
+        Ok(Value::None)
     }
 
     fn serialize_unit_struct(self, _name: &'static str) -> Result<Value> {
-        Err(Error::UnsupportedType("serialize_unit_struct".into()))
+        Ok(Value::None)
     }
 
     fn serialize_unit_variant(
         self,
         _name: &'static str,
         _variant_index: u32,
-        _variant: &'static str,
+        variant: &'static str,
     ) -> Result<Value> {
-        todo!()
+        Ok(Value::String(variant.to_string()))
     }
 
     fn serialize_newtype_struct<T>(self, _name: &'static str, value: &T) -> Result<Value>
@@ -142,12 +142,12 @@ impl serde::Serializer for Encoder {
         _name: &'static str,
         _variant_index: u32,
         _variant: &'static str,
-        _value: &T,
+        value: &T,
     ) -> Result<Value>
     where
         T: ?Sized + serde::Serialize,
     {
-        todo!()
+        value.serialize(self)
     }
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
