@@ -1,23 +1,25 @@
-let
-  rust_overlay = import (builtins.fetchTarball "https://github.com/oxalica/rust-overlay/archive/master.tar.gz");
-  pkgs = import <nixpkgs> { overlays = [ rust_overlay ]; };
-  rustVersion = "latest";
-  rust = pkgs.rust-bin.stable.${rustVersion}.default.override {
-    extensions = [
-      "rust-src"
-      "rust-analyzer"
-    ];
+{
+  description = "Rust Flake";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    flake-utils.url = "github:numtide/flake-utils";
   };
-in
-pkgs.mkShell {
-  buildInputs = [
-    rust
-  ] ++ (with pkgs; [
-    pkg-config
-  ]);
 
-  RUST_BACKTRACE = 1;
-
-  # shellHook = with pkgs; ''export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${lib.makeLibraryPath [
-  # ]}"'';
+  outputs = { self, nixpkgs, rust-overlay, flake-utils, ... }:
+  flake-utils.lib.eachDefaultSystem (system:
+   let
+      overlays = [ (import rust-overlay) ];
+      pkgs = import nixpkgs {
+        inherit system overlays;
+      };
+   in with pkgs; {
+    devShells.default = mkShell {
+      buildInputs = [
+        pkg-config
+        rust-bin.stable.latest.default
+      ];
+    };
+   });
 }
