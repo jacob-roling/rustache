@@ -1,24 +1,25 @@
-use std::{
-    fs::File,
-    io::{BufReader, Cursor},
-    sync::mpsc,
-};
+use rustache::{EmptyContext, Rustache};
+use serde::Serialize;
+use std::io::Write;
 
-use rustache::{
-    lexer::{lex, Token},
-    templates,
-};
+#[derive(Debug, Serialize)]
+struct Index {
+    greeting: String,
+}
 
 fn main() {
-    println!("{:#?}", templates("views", "**/*.mustache"));
-    // let input = String::from("asdas");
-    // let reader = BufReader::with_capacity(64, Cursor::new(input));
-    // let file = File::open("test.mustache").expect("Failed to open file");
-    // let reader = BufReader::with_capacity(64, file);
-    // let (sender, reciever) = mpsc::sync_channel::<Token>(2);
-    // lex(reader, sender);
+    let rustache = Rustache::new("views", "**/*.mustache").unwrap();
+    let mut stdout = std::io::stdout();
 
-    // while let Ok(token) = reciever.recv() {
-    //     println!("{:#?}", token);
-    // }
+    if let Some(error) = rustache.render(
+        "index",
+        &mut stdout,
+        &Index {
+            greeting: "Test".into(),
+        },
+    ) {
+        println!("{}", error);
+    }
+
+    stdout.flush().unwrap();
 }
