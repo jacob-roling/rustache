@@ -78,7 +78,7 @@ pub trait Renderable {
         writable: &mut impl std::io::Write,
         context: &Value,
         partials: Option<&HashMap<String, Vec<Node>>>,
-    ) -> Option<RenderError>;
+    ) -> Result<(), RenderError>;
 }
 
 impl Renderable for &Vec<Node> {
@@ -87,13 +87,13 @@ impl Renderable for &Vec<Node> {
         writable: &mut impl std::io::Write,
         context: &Value,
         partials: Option<&HashMap<String, Vec<Node>>>,
-    ) -> Option<RenderError> {
+    ) -> Result<(), RenderError> {
         for node in self {
-            if let Some(error) = node.render(writable, context, partials) {
-                return Some(error);
+            if let Err(error) = node.render(writable, context, partials) {
+                return Err(error);
             }
         }
-        return None;
+        return Ok(());
     }
 }
 
@@ -103,7 +103,7 @@ impl Renderable for &Node {
         writable: &mut impl std::io::Write,
         context: &Value,
         partials: Option<&HashMap<String, Vec<Node>>>,
-    ) -> Option<RenderError> {
+    ) -> Result<(), RenderError> {
         match self {
             Node::Text(text) => {
                 writable.write(text.as_bytes()).unwrap();
@@ -120,7 +120,7 @@ impl Renderable for &Node {
                     };
                     writable.write(escaped_value.as_bytes()).unwrap();
                 }
-                None => return Some(RenderError::IdentifierDoesNotExist(identifier.into())),
+                None => return Err(RenderError::IdentifierDoesNotExist(identifier.into())),
             },
             Node::Comment(_comment) => {}
             Node::Section {
@@ -138,15 +138,15 @@ impl Renderable for &Node {
                             }
                             _ => {
                                 for child in children {
-                                    if let Some(error) = child.render(writable, value, partials) {
-                                        return Some(error);
+                                    if let Err(error) = child.render(writable, value, partials) {
+                                        return Err(error);
                                     }
                                 }
                             }
                         }
                     }
                 }
-                None => return Some(RenderError::IdentifierDoesNotExist(identifier.into())),
+                None => return Err(RenderError::IdentifierDoesNotExist(identifier.into())),
             },
             Node::Implicit => {
                 writable
@@ -159,14 +159,14 @@ impl Renderable for &Node {
             } => {
                 if let Some(partials) = partials {
                     if let Some(partial) = partials.get(identifier) {
-                        if let Some(error) = partial.render(writable, context, Some(partials)) {
-                            return Some(error);
+                        if let Err(error) = partial.render(writable, context, Some(partials)) {
+                            return Err(error);
                         }
                     } else {
-                        return Some(RenderError::PartialDoesNotExist(identifier.into()));
+                        return Err(RenderError::PartialDoesNotExist(identifier.into()));
                     }
                 } else {
-                    return Some(RenderError::PartialDoesNotExist(identifier.into()));
+                    return Err(RenderError::PartialDoesNotExist(identifier.into()));
                 }
             }
             Node::Parent {
@@ -190,10 +190,10 @@ impl Renderable for &Node {
                     if let Some(parent_partial) = partials.get(identifier) {
                         parent_partial.render(writable, context, Some(&new_partials));
                     } else {
-                        return Some(RenderError::PartialDoesNotExist(identifier.into()));
+                        return Err(RenderError::PartialDoesNotExist(identifier.into()));
                     }
                 } else {
-                    return Some(RenderError::PartialDoesNotExist(identifier.into()));
+                    return Err(RenderError::PartialDoesNotExist(identifier.into()));
                 }
             }
             Node::Block {
@@ -209,7 +209,7 @@ impl Renderable for &Node {
                 }
             }
         }
-        return None;
+        return Ok(());
     }
 }
 
