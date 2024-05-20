@@ -14,3 +14,4 @@ rayon = "1.10.0"
 substring = "1.4.5"
 thiserror = "1.0.58"
 serde = { version = "1.0", features = ["derive"] }
+may_minihttp = "0.1.1"
