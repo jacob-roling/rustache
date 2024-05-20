@@ -4,7 +4,7 @@ Fast, simple and specification compliant\* implementation of the Mustache templa
 
 See the [Mustache Specification](https://github.com/mustache/spec).
 
-Supported features:
+## Supported Features
 
 - [x] Variables
 - [x] Dotted Names
@@ -25,6 +25,16 @@ Supported features:
 
 > [!IMPORTANT]  
 > \*Lambdas returning templates cannot be type checked therefore this implementation differs from the spec in this regard by instead passing the current context to lambda calls. This effectively enables the same result to be achieved but with type safety.
+
+## Bonus Features
+
+- [x] Implements Serde's `Serialize` for simple data contexts.
+
+## Installation
+
+```bash
+cargo add rustache
+```
 
 ## Usage
 
