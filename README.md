@@ -1,6 +1,27 @@
 # Rustache
 
-Fast, simple and fully spec compliant implementation of the Mustache template engine in Rust.
+Fast, simple and fully specification compliant implementation of the Mustache template engine in Rust.
+
+See the [Mustache Specification](https://github.com/mustache/spec).
+
+Supported features:
+
+- [x] Variables
+- [x] Dotted Names
+- [x] Implicit Operator
+- [x] Lambdas
+- [x] Sections
+- [x] Non-Empty Lists
+- [x] Non-False Values
+- [x] Inverted Sections
+- [x] Comments
+- [x] Partials
+- [x] Blocks
+- [x] Set Delimiter
+- [x] Dynamic Variables
+- [ ] Lambdas That Return Templates
+- [ ] Dynamic Sections
+- [ ] Dynamic Parents
 
 ## Usage
 
