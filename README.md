@@ -1,6 +1,6 @@
 # Rustache
 
-Fast, simple and fully specification compliant implementation of the Mustache template engine in Rust.
+Fast, simple and specification compliant\* implementation of the Mustache template engine in Rust.
 
 See the [Mustache Specification](https://github.com/mustache/spec).
 
@@ -24,7 +24,7 @@ Supported features:
 - [ ] Dynamic Parents
 
 > [!IMPORTANT]  
-> Lambdas returning templates cannot be type checked therefore this implementation differs from the spec in this regard by instead passing the current context lambda calls. This effectively enables the same result to be achieved but with type safety.
+> \*Lambdas returning templates cannot be type checked therefore this implementation differs from the spec in this regard by instead passing the current context to lambda calls. This effectively enables the same result to be achieved but with type safety.
 
 ## Usage
 
