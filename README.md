@@ -34,6 +34,8 @@ Supported features:
 <h1>Hello {{ greeting }}</h1>
 ```
 
+`src/main.rs`
+
 ```rust
 use rustache::Rustache;
 use serde::Serialize;
