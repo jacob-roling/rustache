@@ -133,7 +133,9 @@ impl Renderable for &Node {
                         match value {
                             Value::Vec(vec) => {
                                 for value in vec {
-                                    children.render(writable, value, partials);
+                                    if let Err(error) = children.render(writable, value, partials) {
+                                        return Err(error);
+                                    }
                                 }
                             }
                             _ => {
@@ -188,7 +190,9 @@ impl Renderable for &Node {
                     }
 
                     if let Some(parent_partial) = partials.get(identifier) {
-                        parent_partial.render(writable, context, Some(&new_partials));
+                        if let Err(error) = parent_partial.render(writable, context, Some(&new_partials)) {
+                            return Err(error);
+                        }
                     } else {
                         return Err(RenderError::PartialDoesNotExist(identifier.into()));
                     }
@@ -202,9 +206,13 @@ impl Renderable for &Node {
             } => {
                 if let Some(partials) = partials {
                     if let Some(partial) = partials.get(identifier) {
-                        partial.render(writable, context, Some(partials));
+                        if let Err(error) = partial.render(writable, context, Some(partials)) {
+                            return Err(error);
+                        }
                     } else {
-                        children.render(writable, context, Some(partials));
+                        if let Err(error) = children.render(writable, context, Some(partials)) {
+                            return Err(error);
+                        }
                     }
                 }
             }

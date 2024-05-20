@@ -21,7 +21,13 @@ struct MyData {
 
 fn main() {
   let mut stdout = std::io::stdout();
-  let mut rustache = Rustache::new("views", "**/*.mustache").unwrap();
-  rustache.render("hello", &MyData{ greeting: "world".into() }).unwrap();
+  let rustache = Rustache::new("views", "**/*.mustache").expect("failed to parse template files");
+  rustache.render("hello", &mut stdout, &MyData{ greeting: "Rustache!".into() }).expect("failed to render template");
 }
+```
+
+Result:
+
+```html
+<h1>Hello Rustache!</h1>
 ```

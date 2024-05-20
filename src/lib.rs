@@ -84,17 +84,16 @@ impl Rustache {
         name: &str,
         writable: &mut impl std::io::Write,
         context: &T,
-    ) -> Option<node::RenderError>
+    ) -> Result<(), RenderError>
     where
         T: Serialize,
     {
         if !self.partials.contains_key(name) {
-            return Some(RenderError::PartialDoesNotExist(name.into()));
+            return Err(RenderError::PartialDoesNotExist(name.into()));
         }
         let partial = self.partials.get(name).unwrap();
         let value = to_value(context).unwrap();
-        partial.render(writable, &value, Some(&self.partials));
-        return None;
+        return partial.render(writable, &value, Some(&self.partials));
     }
 }
 
