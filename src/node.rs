@@ -160,7 +160,19 @@ impl Renderable for &Node {
                 dynamic,
             } => {
                 if let Some(partials) = partials {
-                    if let Some(partial) = partials.get(identifier) {
+                    if *dynamic {
+                        if let Some(Value::String(dynamic_identifier)) = lookup(identifier.to_string(), context) {
+                            if let Some(partial) = partials.get(dynamic_identifier) {
+                                if let Err(error) = partial.render(writable, context, Some(partials)) {
+                                    return Err(error);
+                                }
+                            } else {
+                                return Err(RenderError::PartialDoesNotExist(identifier.into()));
+                            }
+                        } else {
+                            return Err(RenderError::IdentifierDoesNotExist(identifier.into()));
+                        }
+                    } else if let Some(partial) = partials.get(identifier) {
                         if let Err(error) = partial.render(writable, context, Some(partials)) {
                             return Err(error);
                         }
@@ -189,7 +201,19 @@ impl Renderable for &Node {
                         }
                     }
 
-                    if let Some(parent_partial) = partials.get(identifier) {
+                    if *dynamic {
+                        if let Some(Value::String(dynamic_identifier)) = lookup(identifier.to_string(), context) {
+                            if let Some(parent_partial) = partials.get(dynamic_identifier) {
+                                if let Err(error) = parent_partial.render(writable, context, Some(&new_partials)) {
+                                    return Err(error);
+                                }
+                            } else {
+                                return Err(RenderError::PartialDoesNotExist(identifier.into()));
+                            }
+                        } else {
+                            return Err(RenderError::IdentifierDoesNotExist(identifier.into()));
+                        }
+                    } else if let Some(parent_partial) = partials.get(identifier) {
                         if let Err(error) = parent_partial.render(writable, context, Some(&new_partials)) {
                             return Err(error);
                         }

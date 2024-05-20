@@ -19,9 +19,9 @@ Supported features:
 - [x] Blocks
 - [x] Set Delimiter
 - [x] Dynamic Variables
+- [x] Dynamic Partials
+- [x] Dynamic Parents
 - [ ] Lambdas That Return Templates
-- [ ] Dynamic Sections
-- [ ] Dynamic Parents
 
 > [!IMPORTANT]  
 > \*Lambdas returning templates cannot be type checked therefore this implementation differs from the spec in this regard by instead passing the current context to lambda calls. This effectively enables the same result to be achieved but with type safety.
@@ -47,7 +47,7 @@ struct MyData {
 
 fn main() {
   let mut stdout = std::io::stdout();
-  let rustache = Rustache::new("views", "**/*.mustache").expect("failed to parse template files");
+  let rustache = Rustache::new("views", "**/*.mustache").expect("failed to parse template(s)");
   rustache.render("hello", &mut stdout, &MyData{ greeting: "Rustache!".into() }).expect("failed to render template");
 }
 ```
