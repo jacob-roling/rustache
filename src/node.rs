@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 use thiserror::Error;
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Value {
     String(String),
     Vec(Vec<Value>),
     Bool(bool),
     Object(HashMap<String, Value>),
+    #[serde(skip)] 
     Lambda(fn(current_context: &Value) -> Value),
     None,
 }
